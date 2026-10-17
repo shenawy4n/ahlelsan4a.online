@@ -1,0 +1,766 @@
+import { createServerFn } from "@tanstack/react-start";
+import {
+  PUBLIC_PROVIDER_SELECT,
+  CARD_PROVIDER_SELECT,
+  isPremiumActive,
+  type Category,
+  type Area,
+  type HomepageData,
+  type HomepageProvider,
+  type CategoryAvailability,
+  type ProvidersTotals,
+  type ProvidersResult,
+} from "./directory";
+import { isOpenNow, hasWorkingHoursSet, isProviderEmergency24h } from "./working-hours";
+
+interface MinimalActiveProvider {
+  id: string;
+  name: string;
+  description: string | null;
+  services: string[] | string | null;
+  category_id: string;
+  area_id: string | null;
+  experience_id: string | null;
+  working_hours: string | null;
+  is_emergency_24h?: boolean | null;
+  is_premium: boolean;
+  premium_expires_at: string | null;
+  created_at: string;
+  profession_title?: string | null;
+  assigned_category_ids?: string[];
+}
+
+export interface DirectorySettingsMap {
+  categoryUnits: Record<string, string>;
+  providerProfessions: Record<string, string>;
+  providerCategories: Record<string, string[]>;
+}
+
+// In-memory cache for 60 seconds of directory metadata
+let activeProvidersCache: {
+  timestamp: number;
+  data: MinimalActiveProvider[];
+} | null = null;
+
+let categoriesCache: {
+  timestamp: number;
+  data: { id: string; name: string }[];
+} | null = null;
+
+let areasCache: {
+  timestamp: number;
+  data: { id: string; name: string }[];
+} | null = null;
+
+let directorySettingsCache: {
+  timestamp: number;
+  data: DirectorySettingsMap;
+} | null = null;
+
+const CACHE_TTL_MS = 60_000;
+
+export async function getCachedDirectorySettings(client: any): Promise<DirectorySettingsMap> {
+  const now = Date.now();
+  if (directorySettingsCache && now - directorySettingsCache.timestamp < CACHE_TTL_MS) {
+    return directorySettingsCache.data;
+  }
+  const { data } = await client
+    .from("app_settings")
+    .select("key, value")
+    .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%");
+
+  const categoryUnits: Record<string, string> = {};
+  const providerProfessions: Record<string, string> = {};
+  const providerCategories: Record<string, string[]> = {};
+
+  if (Array.isArray(data)) {
+    for (const row of data) {
+      if (!row.key || !row.value) continue;
+      if (row.key.startsWith("cat_unit_")) {
+        categoryUnits[row.key] = row.value.trim();
+      } else if (row.key.startsWith("prov_unit_")) {
+        providerProfessions[row.key] = row.value.trim();
+      } else if (row.key.startsWith("prov_cats_")) {
+        try {
+          const parsed = JSON.parse(row.value);
+          if (Array.isArray(parsed)) {
+            providerCategories[row.key] = parsed;
+          }
+        } catch {
+          // ignore malformed JSON
+        }
+      }
+    }
+  }
+
+  const result: DirectorySettingsMap = {
+    categoryUnits,
+    providerProfessions,
+    providerCategories,
+  };
+  directorySettingsCache = { timestamp: now, data: result };
+  return result;
+}
+
+export async function getCachedCategoryUnits(client: any): Promise<Record<string, string>> {
+  const settings = await getCachedDirectorySettings(client);
+  return settings.categoryUnits;
+}
+
+async function getCachedActiveProviders(client: any): Promise<MinimalActiveProvider[]> {
+  const now = Date.now();
+  if (activeProvidersCache && now - activeProvidersCache.timestamp < CACHE_TTL_MS) {
+    return activeProvidersCache.data;
+  }
+
+  const [providersRes, dirSettings] = await Promise.all([
+    client
+      .from("providers")
+      .select(
+        "id, name, description, services, category_id, area_id, experience_id, working_hours, is_emergency_24h, is_premium, premium_expires_at, created_at"
+      )
+      .eq("status", "active"),
+    getCachedDirectorySettings(client),
+  ]);
+
+  if (!providersRes.error && Array.isArray(providersRes.data)) {
+    const enriched = (providersRes.data as MinimalActiveProvider[]).map((p) => {
+      const customTitle = dirSettings.providerProfessions[`prov_unit_${p.id}`] || null;
+      const assignedCats = dirSettings.providerCategories[`prov_cats_${p.id}`] || (p.category_id ? [p.category_id] : []);
+      return {
+        ...p,
+        profession_title: customTitle,
+        assigned_category_ids: assignedCats,
+      };
+    });
+
+    activeProvidersCache = {
+      timestamp: now,
+      data: enriched,
+    };
+    return activeProvidersCache.data;
+  }
+
+  return activeProvidersCache?.data || [];
+}
+
+async function getCachedCategories(client: any): Promise<{ id: string; name: string }[]> {
+  const now = Date.now();
+  if (categoriesCache && now - categoriesCache.timestamp < CACHE_TTL_MS) {
+    return categoriesCache.data;
+  }
+  const { data } = await client.from("categories").select("id, name").eq("status", "active");
+  if (Array.isArray(data)) {
+    categoriesCache = { timestamp: now, data };
+    return data;
+  }
+  return categoriesCache?.data || [];
+}
+
+async function getCachedAreas(client: any): Promise<{ id: string; name: string }[]> {
+  const now = Date.now();
+  if (areasCache && now - areasCache.timestamp < CACHE_TTL_MS) {
+    return areasCache.data;
+  }
+  const { data } = await client.from("areas").select("id, name").eq("status", "active");
+  if (Array.isArray(data)) {
+    areasCache = { timestamp: now, data };
+    return data;
+  }
+  return areasCache?.data || [];
+}
+
+export function invalidateCategoryUnitsCache(): void {
+  directorySettingsCache = null;
+  activeProvidersCache = null;
+  categoriesCache = null;
+  areasCache = null;
+}
+
+export const invalidateCategoryCacheServerFn = createServerFn({ method: "POST" })
+  .handler(async () => {
+    invalidateCategoryUnitsCache();
+    return { ok: true };
+  });
+
+function normalizeForSearch(str: string | null | undefined): string {
+  if (!str) return "";
+  return str
+    .replace(/[%,()_\\*'"[\]]/g, " ")
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[ؤئ]/g, "ء")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchesSearch(text: string | null | undefined, query: string): boolean {
+  if (!text) return false;
+  const normText = normalizeForSearch(text);
+  const normQuery = normalizeForSearch(query);
+  if (!normQuery) return true;
+  if (normText.includes(normQuery)) return true;
+  if (normQuery.startsWith("ال") && normQuery.length > 3 && normText.includes(normQuery.slice(2))) {
+    return true;
+  }
+  if (normText.startsWith("ال") && normText.length > 3 && normText.slice(2).includes(normQuery)) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeServicesList(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw
+      .map((s) => (typeof s === "string" ? s.trim() : ""))
+      .filter((s) => s.length > 0);
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((s) => (typeof s === "string" ? s.trim() : ""))
+            .filter((s) => s.length > 0);
+        }
+      } catch {
+        // fallback
+      }
+    }
+    return trimmed
+      .split(/[,،\n]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  }
+  return [];
+}
+
+export const getHomepageDataServerFn = createServerFn({ method: "POST" })
+  .validator((d?: { areaId?: string }) => d)
+  .handler(
+    async ({ data: opts }): Promise<HomepageData> => {
+      const { supabase } = await import("@/integrations/supabase/client");
+
+      const targetAreaId = opts?.areaId;
+
+      // Fetch active providers with minimal columns using 60s in-memory cache
+      const allActiveProviders = await getCachedActiveProviders(supabase);
+
+      // Filter active providers by area if village selected
+      const scopedProviders = targetAreaId
+        ? allActiveProviders.filter((p) => p.area_id === targetAreaId)
+        : allActiveProviders;
+
+      // 1. Featured providers query: strictly admin-featured / premium only
+      let featuredQuery = supabase
+        .from("providers")
+        .select(PUBLIC_PROVIDER_SELECT)
+        .eq("status", "active")
+        .eq("is_premium", true)
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      // 2. Query for active providers to calculate popular & top-rated lists
+      let activeProvidersQuery = supabase
+        .from("providers")
+        .select(PUBLIC_PROVIDER_SELECT)
+        .eq("status", "active");
+
+      if (targetAreaId) {
+        featuredQuery = featuredQuery.eq("area_id", targetAreaId);
+        activeProvidersQuery = activeProvidersQuery.eq("area_id", targetAreaId);
+      }
+
+      // Parallelize queries
+      const [catsRes, areasRes, settingsRes, featuredRes, activeRes, eventsRes, reviewsRes] = await Promise.all([
+        supabase
+          .from("categories")
+          .select("id,name,icon,sort_order,status")
+          .eq("status", "active")
+          .order("sort_order"),
+        supabase
+          .from("areas")
+          .select("id,name,status")
+          .eq("status", "active")
+          .order("name"),
+        supabase
+          .from("app_settings")
+          .select("key,value"),
+        featuredQuery,
+        activeProvidersQuery,
+        (async () => {
+          try {
+            const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+            const res = await supabaseAdmin
+              .from("analytics_events")
+              .select("provider_id, event_type")
+              .in("event_type", ["phone_click", "whatsapp_click", "profile_view"])
+              .not("provider_id", "is", null)
+              .order("created_at", { ascending: false })
+              .limit(5000);
+            return res.data ? res : { data: [] };
+          } catch {
+            return { data: [] };
+          }
+        })(),
+        supabase
+          .from("reviews")
+          .select("provider_id, rating")
+          .eq("status", "approved")
+          .then(
+            (res: any) => (res.error ? { data: [] } : res),
+            () => ({ data: [] })
+          ),
+      ]);
+
+      const settings: Record<string, string> = {};
+      const unitsMap: Record<string, string> = {};
+      for (const s of (settingsRes.data ?? []) as { key: string; value: string }[]) {
+        settings[s.key] = s.value;
+        if (s.key && s.key.startsWith("cat_unit_")) {
+          unitsMap[s.key] = s.value;
+        }
+      }
+
+      const categories = (catsRes.data ?? []) as Category[];
+      for (const cat of categories) {
+        cat.unit_title = settings[`cat_unit_${cat.id}`]?.trim() || cat.unit_title || null;
+      }
+      const category_counts: Record<string, number> = {};
+      const category_availability: Record<string, CategoryAvailability> = {};
+
+      const attachCategoryUnit = (p: any) => {
+        const catId = p.category_id || p.categories?.id;
+        const customUnit = catId ? settings[`cat_unit_${catId}`]?.trim() : undefined;
+        if (p.categories) {
+          (p.categories as any).unit_title = customUnit || (p.categories as any).unit_title || null;
+        } else if (customUnit && catId) {
+          p.categories = { id: catId, name: "", unit_title: customUnit };
+        }
+        p.profession_title = settings[`prov_unit_${p.id}`]?.trim() || null;
+        if (settings[`prov_cats_${p.id}`]) {
+          try {
+            p.assigned_category_ids = JSON.parse(settings[`prov_cats_${p.id}`]);
+          } catch {
+            p.assigned_category_ids = [p.category_id];
+          }
+        } else {
+          p.assigned_category_ids = [p.category_id];
+        }
+      };
+
+      for (const p of scopedProviders) {
+        attachCategoryUnit(p);
+      }
+
+      for (const cat of categories) {
+        const catProviders = scopedProviders.filter((p) => {
+          const assigned = p.assigned_category_ids || (p.category_id ? [p.category_id] : []);
+          return assigned.includes(cat.id);
+        });
+        const total = catProviders.length;
+        category_counts[cat.id] = total;
+
+        let openCount = 0;
+        let hasAnyHours = false;
+
+        for (const p of catProviders) {
+          const is24h = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
+          const hasHours = is24h || hasWorkingHoursSet(p.working_hours);
+          if (hasHours) {
+            hasAnyHours = true;
+          }
+
+          if (is24h || isOpenNow(p.working_hours) === true) {
+            openCount++;
+          }
+        }
+
+        category_availability[cat.id] = {
+          open: openCount,
+          other: total - openCount,
+          total,
+          hasAnyHours,
+        };
+      }
+
+      // Ratings aggregation
+      const ratings: Record<string, { average: number; count: number }> = {};
+      const ratingSums: Record<string, { sum: number; count: number }> = {};
+      for (const r of (reviewsRes.data ?? []) as { provider_id: string; rating: number }[]) {
+        if (!r.provider_id) continue;
+        const entry = ratingSums[r.provider_id] ?? { sum: 0, count: 0 };
+        entry.sum += r.rating;
+        entry.count += 1;
+        ratingSums[r.provider_id] = entry;
+      }
+      for (const [id, stats] of Object.entries(ratingSums)) {
+        ratings[id] = {
+          count: stats.count,
+          average: Math.round((stats.sum / stats.count) * 10) / 10,
+        };
+      }
+
+      // Analytics event counts per provider: weight direct contact requests (phone, whatsapp) higher as direct demand
+      const eventCounts: Record<string, number> = {};
+      for (const ev of (eventsRes.data ?? []) as { provider_id: string; event_type?: string }[]) {
+        if (ev.provider_id) {
+          const weight = (ev.event_type === "phone_click" || ev.event_type === "whatsapp_click") ? 3 : 1;
+          eventCounts[ev.provider_id] = (eventCounts[ev.provider_id] || 0) + weight;
+        }
+      }
+
+      const allActiveList = (activeRes.data ?? []) as HomepageProvider[];
+      for (const p of allActiveList) {
+        if (ratings[p.id]) {
+          p.average_rating = ratings[p.id].average;
+          p.review_count = ratings[p.id].count;
+        }
+        attachCategoryUnit(p);
+      }
+
+      // 1. Featured providers (strictly marked premium by admin)
+      const featured_providers = ((featuredRes.data ?? []) as HomepageProvider[]).filter((p) => isPremiumActive(p));
+      for (const p of featured_providers) {
+        if (ratings[p.id]) {
+          p.average_rating = ratings[p.id].average;
+          p.review_count = ratings[p.id].count;
+        }
+        attachCategoryUnit(p);
+      }
+
+      // 2. Most Requested (based on analytics event volume)
+      const popular_providers = [...allActiveList]
+        .sort((a, b) => {
+          const ca = eventCounts[a.id] || 0;
+          const cb = eventCounts[b.id] || 0;
+          if (cb !== ca) return cb - ca;
+          if (b.is_verified !== a.is_verified) return (b.is_verified ? 1 : 0) - (a.is_verified ? 1 : 0);
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        })
+        .slice(0, 6);
+
+      // 3. Top Rated (based on reviews average and count)
+      const top_rated_providers = [...allActiveList]
+        .sort((a, b) => {
+          const ra = ratings[a.id]?.average || 0;
+          const rb = ratings[b.id]?.average || 0;
+          if (rb !== ra) return rb - ra;
+          const ca = ratings[a.id]?.count || 0;
+          const cb = ratings[b.id]?.count || 0;
+          if (cb !== ca) return cb - ca;
+          if (b.is_verified !== a.is_verified) return (b.is_verified ? 1 : 0) - (a.is_verified ? 1 : 0);
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        })
+        .slice(0, 6);
+
+      return {
+        settings,
+        categories,
+        areas: (areasRes.data ?? []) as Area[],
+        category_counts,
+        category_availability,
+        featured_providers,
+        popular_providers,
+        top_rated_providers,
+        ratings,
+      };
+    }
+  );
+
+export const getCategoriesServerFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Category[]> => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const [catsRes, unitsMap] = await Promise.all([
+      supabase
+        .from("categories")
+        .select("id,name,icon,sort_order,status")
+        .eq("status", "active")
+        .order("sort_order"),
+      getCachedCategoryUnits(supabase),
+    ]);
+    const cats = (catsRes.data ?? []) as Category[];
+    for (const c of cats) {
+      c.unit_title = unitsMap[`cat_unit_${c.id}`]?.trim() || c.unit_title || null;
+    }
+    return cats;
+  }
+);
+
+export const getAreasServerFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Area[]> => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase
+      .from("areas")
+      .select("id,name,status")
+      .eq("status", "active")
+      .order("name");
+    return (data ?? []) as Area[];
+  }
+);
+
+export const getSettingsServerFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Record<string, string>> => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase.from("app_settings").select("key,value");
+    return Object.fromEntries(
+      (data ?? []).map((r: { key: string; value: string }) => [r.key, r.value])
+    );
+  }
+);
+
+export const getCategoryCountsServerFn = createServerFn({ method: "GET" }).handler(
+  async (): Promise<Record<string, number>> => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    try {
+      const { data, error } = await (supabase.rpc as any)("get_homepage_data");
+      if (!error && data?.category_counts) {
+        return data.category_counts as Record<string, number>;
+      }
+    } catch {
+      // Fallback
+    }
+    return {};
+  }
+);
+
+export const getProvidersServerFn = createServerFn({ method: "POST" })
+  .validator((d: {
+    categoryId?: string;
+    areaId?: string;
+    experienceId?: string;
+    search?: string;
+    filterMode?: "all" | "available_now" | "emergency_now";
+    premiumOnly?: boolean;
+    limit?: number;
+    offset?: number;
+  }) => d)
+  .handler(async ({ data: opts }): Promise<ProvidersResult> => {
+    const { supabase } = await import("@/integrations/supabase/client");
+
+    const limit = opts.limit ?? 20;
+    const offset = opts.offset ?? 0;
+    const rawSearch = opts.search ? opts.search.trim().slice(0, 60) : "";
+
+    // 1. Fetch all active providers with minimal columns using 60s in-memory cache
+    const allActive = await getCachedActiveProviders(supabase);
+    const [categories, areas] = await Promise.all([
+      getCachedCategories(supabase),
+      getCachedAreas(supabase),
+    ]);
+    const catMap = new Map(categories.map((c) => [c.id, c.name]));
+    const areaMap = new Map(areas.map((a) => [a.id, a.name]));
+
+    // 2. Filter matching active providers for current query (q, category, village)
+    const matchingProviders = allActive.filter((p) => {
+      if (opts.categoryId) {
+        const assigned = p.assigned_category_ids || (p.category_id ? [p.category_id] : []);
+        if (!assigned.includes(opts.categoryId)) return false;
+      }
+      if (opts.areaId && p.area_id !== opts.areaId) return false;
+      if (opts.experienceId && p.experience_id !== opts.experienceId) return false;
+      if (opts.premiumOnly && !isPremiumActive(p)) return false;
+
+      if (rawSearch) {
+        if (matchesSearch(p.name, rawSearch)) return true;
+        if (matchesSearch(p.profession_title, rawSearch)) return true;
+        if (matchesSearch(p.description, rawSearch)) return true;
+        const srvs = normalizeServicesList(p.services);
+        if (srvs.some((s) => matchesSearch(s, rawSearch))) return true;
+        const catName = catMap.get(p.category_id);
+        if (catName && matchesSearch(catName, rawSearch)) return true;
+        if (p.area_id) {
+          const areaName = areaMap.get(p.area_id);
+          if (areaName && matchesSearch(areaName, rawSearch)) return true;
+        }
+        return false;
+      }
+
+      return true;
+    });
+
+    // 3. Compute exact totals across ALL matching providers (never page-capped)
+    let openNow = 0;
+    let closedNow = 0;
+    let hoursNotSet = 0;
+    let emergency24 = 0;
+
+    for (const p of matchingProviders) {
+      const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
+      if (isEmerg) emergency24++;
+
+      const status = isOpenNow(p.working_hours);
+      if (isEmerg || status === true) {
+        openNow++;
+      } else if (status === false) {
+        closedNow++;
+      } else {
+        hoursNotSet++;
+      }
+    }
+
+    const totals: ProvidersTotals = {
+      all: matchingProviders.length,
+      openNow,
+      closedNow,
+      hoursNotSet,
+      emergency24,
+    };
+
+    // 4. Order items according to requested view:
+    // Inside each group: premium first, then newest
+    const comparePremiumThenNewest = (a: MinimalActiveProvider, b: MinimalActiveProvider) => {
+      const aPrem = isPremiumActive(a) ? 1 : 0;
+      const bPrem = isPremiumActive(b) ? 1 : 0;
+      if (aPrem !== bPrem) return bPrem - aPrem;
+      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+    };
+
+    let orderedProviders: MinimalActiveProvider[];
+
+    if (opts.filterMode === "available_now") {
+      const openGroup = matchingProviders
+        .filter((p) => {
+          const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
+          return isEmerg || isOpenNow(p.working_hours) === true;
+        })
+        .sort(comparePremiumThenNewest);
+
+      const closedGroup = matchingProviders
+        .filter((p) => {
+          const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
+          return !isEmerg && isOpenNow(p.working_hours) === false;
+        })
+        .sort(comparePremiumThenNewest);
+
+      const notSetGroup = matchingProviders
+        .filter((p) => {
+          const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
+          return !isEmerg && isOpenNow(p.working_hours) === null;
+        })
+        .sort(comparePremiumThenNewest);
+
+      orderedProviders = [...openGroup, ...closedGroup, ...notSetGroup];
+    } else if (opts.filterMode === "emergency_now") {
+      orderedProviders = matchingProviders
+        .filter((p) => Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours)))
+        .sort(comparePremiumThenNewest);
+    } else {
+      orderedProviders = [...matchingProviders].sort(comparePremiumThenNewest);
+    }
+
+    // 5. Slice requested page of items
+    const pageProviders = orderedProviders.slice(offset, offset + limit);
+    const pageIds = pageProviders.map((p) => p.id);
+
+    if (pageIds.length === 0) {
+      return {
+        totals,
+        items: [],
+      };
+    }
+
+    // 6. Load full card rows for the paged IDs with reviews & services
+    let fullRows: any[] = [];
+    const [rowsRes, revsRes] = await Promise.all([
+      supabase
+        .from("providers")
+        .select(CARD_PROVIDER_SELECT)
+        .in("id", pageIds),
+      supabase
+        .from("reviews")
+        .select("provider_id, rating")
+        .in("provider_id", pageIds)
+        .eq("status", "approved"),
+    ]);
+
+    if (rowsRes.error) {
+      console.warn("[getProvidersServerFn error, falling back to cached providers]", rowsRes.error.message);
+      fullRows = pageProviders as any[];
+    } else {
+      fullRows = rowsRes.data ?? [];
+    }
+
+    const dirSettings = await getCachedDirectorySettings(supabase);
+    const pageRatings: Record<string, { sum: number; count: number }> = {};
+    for (const rev of (revsRes.data ?? []) as { provider_id: string; rating: number }[]) {
+      if (!rev.provider_id) continue;
+      const cur = pageRatings[rev.provider_id] || { sum: 0, count: 0 };
+      cur.sum += Number(rev.rating) || 0;
+      cur.count += 1;
+      pageRatings[rev.provider_id] = cur;
+    }
+
+    const rowMap = new Map<string, any>();
+    for (const r of fullRows ?? []) {
+      const catId = r.category_id || r.categories?.id;
+      const customUnit = catId ? dirSettings.categoryUnits[`cat_unit_${catId}`]?.trim() : undefined;
+      if (r.categories) {
+        r.categories.unit_title = customUnit || (r.categories as any).unit_title || null;
+      }
+      r.profession_title = dirSettings.providerProfessions[`prov_unit_${r.id}`]?.trim() || null;
+      r.assigned_category_ids = dirSettings.providerCategories[`prov_cats_${r.id}`] || (r.category_id ? [r.category_id] : []);
+
+      const rStats = pageRatings[r.id];
+      const revCount = rStats ? rStats.count : 0;
+      const avg = revCount > 0 ? Math.round((rStats.sum / revCount) * 10) / 10 : 0;
+      r.average_rating = avg;
+      r.review_count = revCount;
+      rowMap.set(r.id, r);
+    }
+
+    const items = pageIds.map((id) => rowMap.get(id)).filter(Boolean);
+
+    return {
+      totals,
+      items,
+    };
+  });
+
+export const getProviderDetailServerFn = createServerFn({ method: "POST" })
+  .validator((id: string) => id)
+  .handler(async ({ data: id }) => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const [provRes, revsRes, dirSettings] = await Promise.all([
+      supabase
+        .from("providers")
+        .select(PUBLIC_PROVIDER_SELECT)
+        .eq("id", id)
+        .maybeSingle(),
+      supabase
+        .from("reviews")
+        .select("rating")
+        .eq("provider_id", id)
+        .eq("status", "approved"),
+      getCachedDirectorySettings(supabase),
+    ]);
+
+    const data = provRes.data;
+    if (data) {
+      const catId = (data as any).category_id || (data as any).categories?.id;
+      const customUnit = catId ? dirSettings.categoryUnits[`cat_unit_${catId}`]?.trim() : undefined;
+      if ((data as any).categories) {
+        (data as any).categories.unit_title = customUnit || (data as any).categories.unit_title || null;
+      }
+      (data as any).profession_title = dirSettings.providerProfessions[`prov_unit_${id}`]?.trim() || null;
+      (data as any).assigned_category_ids = dirSettings.providerCategories[`prov_cats_${id}`] || (data.category_id ? [data.category_id] : []);
+
+      const revs = revsRes.data ?? [];
+      const count = revs.length;
+      (data as any).review_count = count;
+      (data as any).average_rating = count > 0
+        ? Math.round((revs.reduce((sum: number, r: any) => sum + (Number(r.rating) || 0), 0) / count) * 10) / 10
+        : 0;
+    }
+    return data ?? null;
+  });
+
+export { getAdminProvidersServerFn } from "./admin-actions.functions";
+
