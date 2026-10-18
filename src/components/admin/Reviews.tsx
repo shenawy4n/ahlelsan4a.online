@@ -211,10 +211,19 @@ export function AdminReviews({ isModerator }: { isModerator?: boolean } = {}) {
                       </span>
                     </div>
 
-                    <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                       <span className="font-semibold text-foreground/80">
-                        {r.reviewer_name || "عميل مجهول"}
+                        {r.reviewer_name || "عميل (الاسم اختياري)"}
                       </span>
+                      <span>·</span>
+                      {r.reviewer_phone ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-2 py-0.5 font-mono text-xs font-bold text-primary">
+                          <span>هاتف التحقق:</span>
+                          <span dir="ltr">{r.reviewer_phone}</span>
+                        </span>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground">هاتف غير مسجل</span>
+                      )}
                       <span>·</span>
                       <span>{new Date(r.created_at).toLocaleDateString("ar-EG")}</span>
                       <span>{new Date(r.created_at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" })}</span>

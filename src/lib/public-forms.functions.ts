@@ -53,6 +53,7 @@ const schema = z.discriminatedUnion("form", [
     rating: z.number().int().min(1).max(5),
     comment: clean(500).pipe(z.string().min(3)),
     reviewer_name: clean(50).optional(),
+    reviewer_phone: z.string().min(8).max(30),
   }),
 ]);
 
@@ -69,6 +70,8 @@ export const submitPublicForm = createServerFn({ method: "POST" })
 
     let phone: string | null = null;
     let whatsapp: string | null = null;
+    let reviewerPhone: string | null = null;
+
     if (data.form === "provider_application") {
       const { normalizeEgPhone } = await import("./directory");
       phone = normalizeEgPhone(data.phone);
@@ -77,6 +80,10 @@ export const submitPublicForm = createServerFn({ method: "POST" })
         whatsapp = normalizeEgPhone(data.whatsapp);
         if (!whatsapp) return { ok: false, code: "invalid_phone" };
       }
+    } else if (data.form === "review") {
+      const { normalizeEgPhone } = await import("./directory");
+      reviewerPhone = normalizeEgPhone(data.reviewer_phone);
+      if (!reviewerPhone) return { ok: false, code: "invalid_phone" };
     }
 
     const { checkCurrentRequestRateLimit } = await import("./rate-limit.server");
@@ -119,6 +126,7 @@ export const submitPublicForm = createServerFn({ method: "POST" })
         rating: data.rating,
         comment: data.comment,
         reviewer_name: data.reviewer_name || null,
+        reviewer_phone: reviewerPhone!,
       });
       return res.ok ? { ok: true } : { ok: false, code: "error" };
     }

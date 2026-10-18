@@ -220,7 +220,13 @@ export function Providers({
               {p.status !== "active" ? <span className="text-xs text-destructive">(مخفي)</span> : null}{" "}
               {isFlagged(p) ? <AlertTriangle className="inline size-4 text-destructive" /> : null}
             </p>
-            <p className="truncate text-sm text-muted-foreground">{getProviderProfessionTitle(p)} · {p.areas?.name ?? "—"} · <span dir="ltr">{p.phone}</span>{p.experience_options ? ` · ${p.experience_options.label}` : ""}</p>
+            <p className="truncate text-sm text-muted-foreground">
+              {getProviderProfessionTitle(p)} · {p.areas?.name ?? "—"} · <span dir="ltr">{p.phone}</span>
+              {Array.isArray((p as any).assigned_category_ids) && (p as any).assigned_category_ids.length > 1
+                ? ` · (${(p as any).assigned_category_ids.length} أقسام)`
+                : ""}
+              {p.experience_options ? ` · ${p.experience_options.label}` : ""}
+            </p>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-0.5">
             <a
@@ -532,8 +538,95 @@ function ProviderForm({
       </div>
       {field("name", "الاسم *", { required: true, maxLength: 100 })}
       <div className="grid grid-cols-2 gap-2">
-        <label className="grid gap-1 text-sm font-bold">القسم *<select value={f.category_id} onChange={set("category_id")} className={input} required><option value="">اختار</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-        <label className="grid gap-1 text-sm font-bold">المنطقة *<select value={f.area_id} onChange={set("area_id")} className={input} required><option value="">اختار</option>{areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></label>
+        <label className="grid gap-1 text-sm font-bold">
+          القسم الرئيسي *
+          <select
+            value={f.category_id}
+            onChange={(e) => {
+              const val = e.target.value;
+              const assigned = Array.from(new Set([val, ...(f.assigned_category_ids || [])])).filter(Boolean);
+              setF({ ...f, category_id: val, assigned_category_ids: assigned });
+            }}
+            className={input}
+            required
+          >
+            <option value="">اختار القسم الرئيسي</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="grid gap-1 text-sm font-bold">
+          المنطقة *
+          <select value={f.area_id} onChange={set("area_id")} className={input} required>
+            <option value="">اختار</option>
+            {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {/* Multi-category assignment selector */}
+      <div className="rounded-xl border border-border/80 bg-card/60 p-3.5 space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-bold text-foreground">
+            تعدد الأقسام والتخصصات (اختيار أكثر من قسم لنفس الصنايعي)
+          </label>
+          <span className="text-xs text-muted-foreground font-semibold">
+            {Array.from(new Set([f.category_id, ...(f.assigned_category_ids || [])])).filter(Boolean).length} أقسام محددة
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          يمكنك تعيين الصنايعي في أكثر من قسم يقدم فيه خدماته (مثل: كهرباء + تكييف). يظل الصنايعي سجلاً واحداً في النظام دون تكرار إجمالي الأعداد.
+        </p>
+        <div className="flex flex-wrap gap-1.5 pt-1">
+          {categories.map((c) => {
+            const currentAssigned = Array.from(new Set([f.category_id, ...(f.assigned_category_ids || [])])).filter(Boolean);
+            const isSelected = currentAssigned.includes(c.id);
+            const isPrimary = f.category_id === c.id;
+            return (
+              <button
+                type="button"
+                key={c.id}
+                onClick={() => {
+                  let next: string[];
+                  if (isSelected) {
+                    if (currentAssigned.length <= 1) {
+                      toast.warning("يجب تحديد قسم واحد على الأقل لهذا الصنايعي");
+                      return;
+                    }
+                    next = currentAssigned.filter((id) => id !== c.id);
+                    const nextPrimary = isPrimary ? next[0] || "" : f.category_id;
+                    setF({ ...f, assigned_category_ids: next, category_id: nextPrimary });
+                  } else {
+                    next = Array.from(new Set([...currentAssigned, c.id]));
+                    const nextPrimary = f.category_id || c.id;
+                    setF({ ...f, assigned_category_ids: next, category_id: nextPrimary });
+                  }
+                }}
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-bold transition-all ${
+                  isSelected
+                    ? isPrimary
+                      ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary"
+                      : "bg-secondary text-foreground ring-1 ring-primary/40 font-extrabold"
+                    : "bg-muted/40 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                <span>{c.name}</span>
+                {isSelected && (
+                  <span
+                    className={`text-[10px] px-1 rounded ${
+                      isPrimary
+                        ? "bg-primary-foreground/20 text-primary-foreground font-black"
+                        : "bg-primary/10 text-primary"
+                    }`}
+                  >
+                    {isPrimary ? "رئيسي" : "إضافي"}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
         <label className="grid gap-1.5 text-sm font-bold text-foreground">

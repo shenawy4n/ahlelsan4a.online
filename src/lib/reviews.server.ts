@@ -6,6 +6,7 @@ export interface ReviewRecord {
   rating: number; // 1-5
   comment: string;
   reviewer_name: string | null;
+  reviewer_phone?: string | null;
   status: "pending" | "approved" | "rejected";
   created_at: string;
   reviewed_at?: string | null;
@@ -27,6 +28,37 @@ export interface ProviderRatingSummary {
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function getEncryptionKey(): Buffer {
+  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_URL || "ahlelsan3a-secure-review-salt-2026";
+  return crypto.createHash("sha256").update(secret).digest();
+}
+
+function encryptPhone(phone: string): string {
+  try {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", getEncryptionKey(), iv);
+    const enc = Buffer.concat([cipher.update(phone, "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `${iv.toString("hex")}:${tag.toString("hex")}:${enc.toString("hex")}`;
+  } catch {
+    return phone;
+  }
+}
+
+function decryptPhone(token: string): string | null {
+  try {
+    const parts = token.split(":");
+    if (parts.length !== 3) return token;
+    const [ivHex, tagHex, dataHex] = parts;
+    const decipher = crypto.createDecipheriv("aes-256-gcm", getEncryptionKey(), Buffer.from(ivHex, "hex"));
+    decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+    const dec = Buffer.concat([decipher.update(Buffer.from(dataHex, "hex")), decipher.final()]);
+    return dec.toString("utf8");
+  } catch {
+    return null;
+  }
+}
 
 function isTableMissingOrSchemaError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -54,13 +86,14 @@ export async function createReview(data: {
   rating: number;
   comment: string;
   reviewer_name?: string | null;
+  reviewer_phone?: string | null;
 }): Promise<{ ok: boolean; id: string }> {
   const newId = crypto.randomUUID();
   if (!data.provider_id || !UUID_REGEX.test(data.provider_id.trim())) {
     return { ok: false, id: newId };
   }
 
-  const record = {
+  const record: Record<string, any> = {
     id: newId,
     provider_id: data.provider_id.trim(),
     rating: data.rating,
@@ -79,6 +112,17 @@ export async function createReview(data: {
       }
       return { ok: false, id: newId };
     }
+
+    // Securely persist reviewer phone for authorized admin verification
+    if (data.reviewer_phone) {
+      const encrypted = encryptPhone(data.reviewer_phone.trim());
+      await supabaseAdmin.from("app_settings").upsert({
+        key: `rev_sec_${newId}`,
+        value: encrypted,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
     return { ok: true, id: newId };
   } catch (e) {
     if (!isTableMissingOrSchemaError(e)) {
@@ -205,7 +249,28 @@ export async function adminGetReviews(status?: "pending" | "approved" | "rejecte
       }
       return [];
     }
-    return (data ?? []) as unknown as ReviewRecord[];
+
+    const { data: phoneSettings } = await supabaseAdmin
+      .from("app_settings")
+      .select("key, value")
+      .like("key", "rev_sec_%");
+
+    const phoneMap: Record<string, string> = {};
+    if (Array.isArray(phoneSettings)) {
+      for (const row of phoneSettings) {
+        if (row.key && row.value) {
+          const revId = row.key.replace("rev_sec_", "");
+          const dec = decryptPhone(row.value);
+          if (dec) phoneMap[revId] = dec;
+        }
+      }
+    }
+
+    const list = (data ?? []) as unknown as ReviewRecord[];
+    for (const r of list) {
+      r.reviewer_phone = (r as any).reviewer_phone || phoneMap[r.id] || null;
+    }
+    return list;
   } catch (e) {
     if (!isTableMissingOrSchemaError(e)) {
       console.error("[reviews.server] Exception in adminGetReviews:", e);
@@ -232,6 +297,8 @@ export async function adminModerateReview(
         }
         return { ok: false };
       }
+      // Clean up secure phone token
+      await supabaseAdmin.from("app_settings").delete().eq("key", `rev_sec_${reviewId}`);
       return { ok: true };
     } else {
       const newStatus = action === "approve" ? "approved" : "rejected";

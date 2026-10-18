@@ -17,6 +17,7 @@ import {
   deleteSuggestionAdminFn,
   getAdminApplicationsServerFn,
   actApplicationAdminFn,
+  saveSettingsAdminFn,
 } from "@/lib/admin-actions.functions";
 
 type Ev = { event_type: string; provider_id: string | null; category_id: string | null };
@@ -826,8 +827,11 @@ export function Settings() {
       }
 
       setVals((prev) => ({ ...(prev ?? v), logo_url: finalUrl }));
-      await supabase.from("app_settings").upsert({ key: "logo_url", value: finalUrl, updated_at: new Date().toISOString() });
+      await saveSettingsAdminFn({
+        data: { rows: [{ key: "logo_url", value: finalUrl }] },
+      });
       qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["homepage-data"] });
       toast.success("تم تحديث وحفظ لوجو المنصة بنجاح");
     } catch (err: any) {
       toast.error(err.message || "فشل رفع اللوجو");
@@ -842,9 +846,12 @@ export function Settings() {
     if (!url) return;
     setBusy(true);
     try {
-      await supabase.from("app_settings").upsert({ key: "logo_url", value: url, updated_at: new Date().toISOString() });
+      await saveSettingsAdminFn({
+        data: { rows: [{ key: "logo_url", value: url }] },
+      });
       setVals((prev) => ({ ...(prev ?? v), logo_url: url }));
       qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["homepage-data"] });
       toast.success("تم حفظ رابط اللوجو بنجاح");
       setLogoUrlInput("");
     } catch (err: any) {
@@ -856,9 +863,16 @@ export function Settings() {
 
   async function removeLogo() {
     setVals((prev) => ({ ...(prev ?? v), logo_url: "" }));
-    await supabase.from("app_settings").upsert({ key: "logo_url", value: null, updated_at: new Date().toISOString() });
-    qc.invalidateQueries({ queryKey: ["settings"] });
-    toast.success("تمت إزالة اللوجو والعودة للشعار الافتراضي");
+    try {
+      await saveSettingsAdminFn({
+        data: { rows: [{ key: "logo_url", value: null }] },
+      });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["homepage-data"] });
+      toast.success("تمت إزالة اللوجو والعودة للشعار الافتراضي");
+    } catch {
+      toast.error("فشل إزالة اللوجو");
+    }
   }
 
   async function save(e: React.FormEvent) {
@@ -878,14 +892,24 @@ export function Settings() {
     const rows = keysToSave.map((key) => ({
       key,
       value: key === "logo_url" ? currentLogoVal : (v[key]?.trim() || null),
-      updated_at: new Date().toISOString(),
     }));
-    const { error } = await supabase.from("app_settings").upsert(rows);
-    setBusy(false);
-    if (error) { toast.error("ماقدرناش نحفظ الإعدادات، جرّب تاني"); return; }
-    toast.success("اتحفظت الإعدادات بنجاح");
-    setVals(null);
-    qc.invalidateQueries({ queryKey: ["settings"] });
+
+    try {
+      const res = await saveSettingsAdminFn({ data: { rows } });
+      setBusy(false);
+      if (!res.ok) {
+        toast.error("ماقدرناش نحفظ الإعدادات، جرّب تاني");
+        return;
+      }
+      toast.success("اتحفظت الإعدادات بنجاح");
+      setVals(null);
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["homepage-data"] });
+    } catch (err: any) {
+      setBusy(false);
+      console.error("[saveSettings error]", err);
+      toast.error("ماقدرناش نحفظ الإعدادات، جرّب تاني");
+    }
   }
 
   const currentLogo = v["logo_url"] || data?.["logo_url"];

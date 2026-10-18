@@ -4,6 +4,7 @@ import { Star, MessageSquarePlus, CheckCircle2, User, Sparkles } from "lucide-re
 import { toast } from "sonner";
 import { getProviderReviews, getProviderRatingSummary } from "@/lib/reviews.functions";
 import { submitPublicForm, publicFormError } from "@/lib/public-forms.functions";
+import { normalizeEgPhone } from "@/lib/directory";
 
 interface ProviderReviewsProps {
   providerId: string;
@@ -17,6 +18,7 @@ export function ProviderReviews({ providerId, providerName }: ProviderReviewsPro
   const [hoverRating, setHoverRating] = useState<number>(0);
   const [comment, setComment] = useState("");
   const [reviewerName, setReviewerName] = useState("");
+  const [reviewerPhone, setReviewerPhone] = useState("");
   const [hp, setHp] = useState("");
   const [busy, setBusy] = useState(false);
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
@@ -57,6 +59,15 @@ export function ProviderReviews({ providerId, providerName }: ProviderReviewsPro
       toast.error("يرجى كتابة تعليق لا يقل عن ٣ أحرف");
       return;
     }
+    if (!reviewerPhone.trim()) {
+      toast.error("يرجى إدخال رقم الهاتف للتحقق من التقييم");
+      return;
+    }
+    const normPhone = normalizeEgPhone(reviewerPhone);
+    if (!normPhone) {
+      toast.error("رقم الهاتف غير صحيح (يجب أن يكون رقم محمول مصري مثل 01012345678)");
+      return;
+    }
 
     setBusy(true);
     try {
@@ -67,6 +78,7 @@ export function ProviderReviews({ providerId, providerName }: ProviderReviewsPro
           rating,
           comment: comment.trim(),
           reviewer_name: reviewerName.trim() || undefined,
+          reviewer_phone: normPhone,
           website: hp,
         },
       });
@@ -80,6 +92,7 @@ export function ProviderReviews({ providerId, providerName }: ProviderReviewsPro
       setShowForm(false);
       setComment("");
       setReviewerName("");
+      setReviewerPhone("");
       setRating(5);
       toast.success("شكراً لمشاركتك! تم إرسال تقييمك وسيظهر بعد المراجعة والاعتماد.");
       qc.invalidateQueries({ queryKey: ["admin", "reviews"] });
@@ -236,6 +249,28 @@ export function ProviderReviews({ providerId, providerName }: ProviderReviewsPro
                 <span>الحد الأدنى ٣ أحرف</span>
                 <span>{comment.length} / 500</span>
               </div>
+            </div>
+
+            {/* Reviewer Phone (required for verification, kept private) */}
+            <div>
+              <label className="block text-xs font-bold text-foreground mb-1.5 flex items-center justify-between">
+                <span>رقم المحمول للتحقق <span className="text-destructive">*</span></span>
+                <span className="text-[11px] font-normal text-muted-foreground">لن يظهر للعامة أبداً 🔒</span>
+              </label>
+              <input
+                type="tel"
+                required
+                dir="ltr"
+                inputMode="tel"
+                maxLength={20}
+                value={reviewerPhone}
+                onChange={(e) => setReviewerPhone(e.target.value)}
+                placeholder="01012345678"
+                className="w-full rounded-xl border border-border bg-card px-3.5 py-2.5 text-base text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 font-mono text-start"
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                رقم هاتفك مطلوب للتأكد من حقيقة التجربة، ويبقى سرياً تماماً للإدارة ولن يُنشر على صفحة الصنايعي.
+              </p>
             </div>
 
             {/* Reviewer name (optional) */}

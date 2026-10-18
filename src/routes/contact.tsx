@@ -12,12 +12,28 @@ import {
   Loader2,
   ArrowRight,
   HelpCircle,
+  Facebook,
+  MessageCircle,
+  Mail,
+  ExternalLink,
+  Globe,
+  PhoneCall,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { settingsQuery } from "@/lib/directory";
+import { settingsQuery, normalizeEgPhone } from "@/lib/directory";
 import { sendContactMessage } from "@/lib/messages.functions";
+
+function safeExternalUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/^(?:https?:)?\/\//i.test(trimmed)) {
+    return trimmed.startsWith("//") ? `https:${trimmed}` : trimmed;
+  }
+  return `https://${trimmed}`;
+}
 
 export const Route = createFileRoute("/contact")({
   head: () => ({

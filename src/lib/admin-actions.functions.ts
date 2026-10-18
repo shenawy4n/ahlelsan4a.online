@@ -585,3 +585,44 @@ export const actApplicationAdminFn = createServerFn({ method: "POST" })
     }
   });
 
+/** Save platform & contact settings (Admin only) */
+export const saveSettingsAdminFn = createServerFn({ method: "POST" })
+  .middleware([requireAdminAuth])
+  .validator((d: { rows: Array<{ key: string; value: string | null }> }) => d)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+
+    if (!data.rows || !Array.isArray(data.rows) || data.rows.length === 0) {
+      throw new Response(
+        JSON.stringify({ ok: false, message: "لا توجد إعدادات للحفظ" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const payload = data.rows.map((r) => ({
+      key: String(r.key).trim(),
+      value: r.value !== null && r.value !== undefined ? String(r.value).trim() || null : null,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error } = await supabaseAdmin.from("app_settings").upsert(payload);
+
+    if (error) {
+      console.error("[saveSettingsAdminFn error]", error);
+      throw new Response(
+        JSON.stringify({ ok: false, message: error.message || "فشل حفظ الإعدادات" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const { invalidateCategoryUnitsCache } = await import("./directory.functions");
+      invalidateCategoryUnitsCache();
+    } catch {
+      // non-blocking
+    }
+
+    return { ok: true as const, count: payload.length };
+  });
+
+

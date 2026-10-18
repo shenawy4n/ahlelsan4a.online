@@ -15,13 +15,38 @@ import {
 } from "@/lib/admin-actions.functions";
 
 function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [q, setQ] = useState("");
+  const filtered = ICON_NAMES.filter((n) => !q.trim() || n.toLowerCase().includes(q.trim().toLowerCase()));
+
   return (
-    <div className="grid grid-cols-8 gap-1 sm:grid-cols-12">
-      {ICON_NAMES.map((n) => (
-        <button type="button" key={n} title={n} onClick={() => onChange(n)} className={`grid aspect-square place-items-center rounded-lg ${value === n ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}>
-          <CategoryIcon name={n} className="size-5" />
-        </button>
-      ))}
+    <div className="space-y-2 rounded-xl border border-border/80 bg-card/60 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-bold text-muted-foreground">
+          اختر أيقونة للقسم ({ICON_NAMES.length} أيقونة متوفرة)
+        </span>
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="بحث في الأيقونات..."
+          className="rounded-lg border border-border bg-card px-2.5 py-1 text-xs max-w-[160px]"
+        />
+      </div>
+      <div className="grid max-h-56 grid-cols-8 gap-1.5 overflow-y-auto p-1 sm:grid-cols-12 rounded-lg bg-background/50 border border-border/40">
+        {filtered.map((n) => (
+          <button
+            type="button"
+            key={n}
+            title={n}
+            onClick={() => onChange(n)}
+            className={`grid aspect-square place-items-center rounded-lg transition-transform hover:scale-105 ${
+              value === n ? "bg-primary text-primary-foreground shadow-xs ring-2 ring-primary/40" : "bg-secondary text-foreground hover:bg-secondary/80"
+            }`}
+          >
+            <CategoryIcon name={n} className="size-5" />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
