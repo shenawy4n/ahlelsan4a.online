@@ -15,7 +15,6 @@ import { ProviderCard } from "@/components/ProviderCard";
 import { CategoryIcon } from "@/components/CategoryIcon";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
-import { HomeContactSection } from "@/components/HomeContactSection";
 
 export const Route = createFileRoute("/")({
   loader: async ({ context }) => {
@@ -442,9 +441,6 @@ function Home() {
 
         {/* Single Merged Join & Suggest Card */}
         <CommunityActionsCard categories={categories} areas={areas} />
-
-        {/* Contact Us Section */}
-        <HomeContactSection settings={homeData?.settings} />
       </main>
 
       <SiteFooter />

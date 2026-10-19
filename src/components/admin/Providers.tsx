@@ -1,7 +1,7 @@
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Star, BadgeCheck, AlertTriangle, ExternalLink, ArrowRight } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Star, BadgeCheck, AlertTriangle, ExternalLink, ArrowRight, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isPremiumActive, settingsQuery, getCategoryUnit, getProviderProfessionTitle, type Area, type Category, type ExperienceOption, type ProviderWithRefs, normalizeEgPhone } from "@/lib/directory";
 import { input, btnGhost, useAll, isFlagged } from "./shared";
@@ -19,8 +19,9 @@ type Form = {
   status: string; is_premium: boolean; premium_expires_at: string; experience_id: string; is_verified: boolean;
   profession_title: string;
   assigned_category_ids: string[];
+  has_delivery: boolean;
 };
-const empty: Form = { name: "", category_id: "", area_id: "", phone: "", secondary_phone: "", whatsapp: "", description: "", services: "", price_description: "", working_hours: "", photo_url: "", status: "active", is_premium: false, premium_expires_at: "", experience_id: "", is_verified: false, profession_title: "", assigned_category_ids: [] };
+const empty: Form = { name: "", category_id: "", area_id: "", phone: "", secondary_phone: "", whatsapp: "", description: "", services: "", price_description: "", working_hours: "", photo_url: "", status: "active", is_premium: false, premium_expires_at: "", experience_id: "", is_verified: false, profession_title: "", assigned_category_ids: [], has_delivery: false };
 
 function toForm(p: ProviderWithRefs): Form {
   const assigned = Array.isArray((p as any).assigned_category_ids) && (p as any).assigned_category_ids.length > 0
@@ -46,6 +47,7 @@ function toForm(p: ProviderWithRefs): Form {
     is_verified: p.is_verified,
     profession_title: p.profession_title ?? "",
     assigned_category_ids: assigned,
+    has_delivery: Boolean((p as any).has_delivery),
   };
 }
 
@@ -215,6 +217,7 @@ export function Providers({
           <div className="min-w-0 flex-1">
             <p className="font-extrabold">
               {p.name}{" "}
+              {p.has_delivery ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 mr-1.5"><Truck className="inline size-3.5" /> توصيل</span> : null}{" "}
               {p.is_verified ? <BadgeCheck className="inline size-4 text-primary" /> : null}{" "}
               {isPremiumActive(p) ? <Star className="inline size-4 fill-premium text-premium" /> : null}{" "}
               {p.status !== "active" ? <span className="text-xs text-destructive">(مخفي)</span> : null}{" "}
@@ -373,6 +376,11 @@ function ProviderForm({
           await supabase.from("app_settings").upsert({ key: settingKey, value: customProf, updated_at: new Date().toISOString() });
         }
 
+        // Save delivery preference into app_settings (prov_deliv_{id})
+        if (f.has_delivery) {
+          await supabase.from("app_settings").upsert({ key: `prov_deliv_${newId}`, value: "true", updated_at: new Date().toISOString() });
+        }
+
         try {
           const { invalidateCategoryCacheServerFn } = await import("@/lib/directory.functions");
           await invalidateCategoryCacheServerFn();
@@ -457,6 +465,14 @@ function ProviderForm({
           await supabase.from("app_settings").upsert({ key: settingKey, value: customProf, updated_at: new Date().toISOString() });
         } else {
           await supabase.from("app_settings").delete().eq("key", settingKey);
+        }
+
+        // Save or delete delivery preference in app_settings (prov_deliv_{id})
+        const delivKey = `prov_deliv_${f.id}`;
+        if (f.has_delivery) {
+          await supabase.from("app_settings").upsert({ key: delivKey, value: "true", updated_at: new Date().toISOString() });
+        } else {
+          await supabase.from("app_settings").delete().eq("key", delivKey);
         }
 
         try {
@@ -678,6 +694,7 @@ function ProviderForm({
       />
       <label className="grid gap-1 text-sm font-bold">الحالة<select value={f.status} onChange={set("status")} className={input}><option value="active">ظاهر</option><option value="hidden">مخفي</option></select></label>
       <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={f.is_verified} onChange={(e) => setF({ ...f, is_verified: e.target.checked })} className="size-5" /> موثّق</label>
+      <label className="flex items-center gap-2 font-bold cursor-pointer"><input type="checkbox" checked={f.has_delivery} onChange={(e) => setF({ ...f, has_delivery: e.target.checked })} className="size-5 accent-primary" /> <span>يوفر خدمة التوصيل للمنازل</span></label>
       <label className="flex items-center gap-2 font-bold"><input type="checkbox" checked={f.is_premium} onChange={(e) => setF({ ...f, is_premium: e.target.checked })} className="size-5" /> مميز</label>
       {f.is_premium ? field("premium_expires_at", "ينتهي التمييز في (فاضي = بدون انتهاء)", { type: "date" }) : null}
       <div className="grid grid-cols-2 gap-2">

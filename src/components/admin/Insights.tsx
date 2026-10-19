@@ -865,7 +865,7 @@ export function Settings() {
     setVals((prev) => ({ ...(prev ?? v), logo_url: "" }));
     try {
       await saveSettingsAdminFn({
-        data: { rows: [{ key: "logo_url", value: null }] },
+        data: { rows: [{ key: "logo_url", value: "" }] },
       });
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["homepage-data"] });
@@ -888,10 +888,10 @@ export function Settings() {
       "privacy_content",
       "terms_content",
     ];
-    const currentLogoVal = v["logo_url"] !== undefined ? (v["logo_url"]?.trim() || null) : (data?.["logo_url"] || null);
+    const currentLogoVal = v["logo_url"] !== undefined ? (v["logo_url"]?.trim() || "") : (data?.["logo_url"] || "");
     const rows = keysToSave.map((key) => ({
       key,
-      value: key === "logo_url" ? currentLogoVal : (v[key]?.trim() || null),
+      value: key === "logo_url" ? currentLogoVal : (v[key]?.trim() || ""),
     }));
 
     try {

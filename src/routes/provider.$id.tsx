@@ -5,7 +5,7 @@ import { ArrowRight, MapPin, Clock, Wallet, Wrench, Flag, Award } from "lucide-r
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { isPremiumActive, providerQuery, getCategoryUnit, getProviderProfessionTitle } from "@/lib/directory";
-import { PremiumBadge, VerifiedBadge, ProviderRatingBadge, EmergencyBadge } from "@/components/ProviderCard";
+import { PremiumBadge, VerifiedBadge, ProviderRatingBadge, EmergencyBadge, DeliveryBadge } from "@/components/ProviderCard";
 import { parseWorkingHours } from "@/lib/working-hours";
 import { ContactButtons } from "@/components/ContactButtons";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -96,6 +96,7 @@ function ProviderPage() {
                 <h1 className="text-2xl font-extrabold">{p.name}</h1>
                 <div className="flex flex-wrap justify-end gap-1">
                   {parseWorkingHours(p.working_hours)?.isEmergency24h ? <EmergencyBadge /> : null}
+                  {p.has_delivery ? <DeliveryBadge /> : null}
                   {p.is_verified ? <VerifiedBadge /> : null}
                   {isPremiumActive(p) ? <PremiumBadge /> : null}
                 </div>

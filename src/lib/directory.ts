@@ -32,6 +32,7 @@ export type Provider = {
   workshop_name?: string | null;
   workshop_address?: string | null;
   photo_url: string | null;
+  has_delivery?: boolean | null;
   status: string;
   is_premium: boolean;
   premium_expires_at: string | null;

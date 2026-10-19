@@ -1,10 +1,24 @@
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
-import { Pencil, Eye, EyeOff, Trash2, ArrowUp, ArrowDown, Check, X } from "lucide-react";
+import {
+  Pencil,
+  Eye,
+  EyeOff,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Check,
+  X,
+  ListOrdered,
+  RotateCcw,
+  Loader2,
+  ArrowUpToLine,
+  ArrowDownToLine,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { CategoryIcon, ICON_NAMES } from "@/components/CategoryIcon";
-import { type Category, getCategoryUnit, settingsQuery } from "@/lib/directory";
+import { type Category, getCategoryUnit, settingsQuery, getProviderProfessionTitle } from "@/lib/directory";
 import { input, btn, useAll } from "./shared";
 import { ConfirmModal, type ConfirmState } from "./ConfirmModal";
 import { AdminErrorState } from "./AdminErrorState";
@@ -12,6 +26,7 @@ import {
   deleteCategoryAdminFn,
   deleteAreaAdminFn,
   deleteExperienceAdminFn,
+  saveCategoryProviderOrderAdminFn,
 } from "@/lib/admin-actions.functions";
 
 function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -51,6 +66,284 @@ function IconPicker({ value, onChange }: { value: string; onChange: (v: string) 
   );
 }
 
+function CategoryProviderOrderModal({
+  category,
+  allProviders,
+  settings,
+  onClose,
+}: {
+  category: Category;
+  allProviders: any[];
+  settings: Record<string, string | null | undefined>;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState(false);
+
+  // 1. Providers assigned to this category (primary or multi-category)
+  const catProviders = useMemo(() => {
+    return allProviders.filter((p) => {
+      const assigned = Array.isArray(p.assigned_category_ids) && p.assigned_category_ids.length > 0
+        ? p.assigned_category_ids
+        : (p.category_id ? [p.category_id] : []);
+      return assigned.includes(category.id);
+    });
+  }, [allProviders, category.id]);
+
+  // 2. Initial order from settings
+  const initialOrdered = useMemo(() => {
+    const rawSaved = settings[`cat_prov_order_${category.id}`];
+    let savedIds: string[] = [];
+    if (rawSaved) {
+      try {
+        const parsed = JSON.parse(rawSaved);
+        if (Array.isArray(parsed)) savedIds = parsed;
+      } catch {
+        // ignore malformed
+      }
+    }
+
+    const map = new Map(catProviders.map((p) => [p.id, p]));
+    const list: any[] = [];
+
+    // Add in saved order first
+    for (const id of savedIds) {
+      const p = map.get(id);
+      if (p) {
+        list.push(p);
+        map.delete(id);
+      }
+    }
+
+    // Add remaining providers in deterministic default order (premium then newest then id)
+    const remaining = Array.from(map.values()).sort((a, b) => {
+      const aPrem = a.is_premium ? 1 : 0;
+      const bPrem = b.is_premium ? 1 : 0;
+      if (aPrem !== bPrem) return bPrem - aPrem;
+      const dateDiff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.id.localeCompare(b.id);
+    });
+
+    return [...list, ...remaining];
+  }, [catProviders, settings, category.id]);
+
+  const [items, setItems] = useState<any[]>(initialOrdered);
+
+  const move = (idx: number, dir: -1 | 1) => {
+    const targetIdx = idx + dir;
+    if (targetIdx < 0 || targetIdx >= items.length) return;
+    const next = [...items];
+    const [moved] = next.splice(idx, 1);
+    next.splice(targetIdx, 0, moved);
+    setItems(next);
+  };
+
+  const moveToExtremity = (idx: number, toStart: boolean) => {
+    if (toStart && idx === 0) return;
+    if (!toStart && idx === items.length - 1) return;
+    const next = [...items];
+    const [moved] = next.splice(idx, 1);
+    if (toStart) {
+      next.unshift(moved);
+    } else {
+      next.push(moved);
+    }
+    setItems(next);
+  };
+
+  const handleSave = async () => {
+    setBusy(true);
+    try {
+      const providerIds = items.map((p) => p.id);
+      await saveCategoryProviderOrderAdminFn({
+        data: {
+          categoryId: category.id,
+          providerIds,
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["providers"] });
+      qc.invalidateQueries({ queryKey: ["homepage-data"] });
+      qc.invalidateQueries({ queryKey: ["admin"] });
+      toast.success(`تم حفظ ترتيب صنايعية قسم "${category.name}" بنجاح`);
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || "فشل حفظ الترتيب");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReset = async () => {
+    setBusy(true);
+    try {
+      await saveCategoryProviderOrderAdminFn({
+        data: {
+          categoryId: category.id,
+          providerIds: [],
+        },
+      });
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["providers"] });
+      qc.invalidateQueries({ queryKey: ["homepage-data"] });
+      qc.invalidateQueries({ queryKey: ["admin"] });
+      toast.success(`تمت استعادة الترتيب التلقائي لقسم "${category.name}"`);
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.message || "فشل استعادة الترتيب");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 overflow-y-auto">
+      <div className="surface w-full max-w-2xl rounded-3xl border border-border p-5 sm:p-6 shadow-xl space-y-4 my-8 animate-in fade-in zoom-in-95 duration-150">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border pb-3">
+          <div className="flex items-center gap-3">
+            <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
+              <CategoryIcon name={category.icon} className="size-6" />
+            </span>
+            <div>
+              <h3 className="text-lg font-extrabold text-foreground flex items-center gap-2">
+                <span>ترتيب صنايعية قسم {category.name}</span>
+                <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                  {items.length} صنايعي
+                </span>
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                رتّب الصنايعية داخل هذا القسم مستقلاً. هذا الترتيب يحدد ظهورهم في دليل هذا القسم للمستخدمين.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl p-2 text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <X className="size-5" />
+          </button>
+        </div>
+
+        {/* Content list */}
+        {items.length === 0 ? (
+          <div className="py-12 text-center text-muted-foreground space-y-2">
+            <p className="font-bold">لا يوجد صنايعية مسجلين في هذا القسم حالياً.</p>
+            <p className="text-xs">سجّل صنايعية في هذا القسم أو حدده كقسم إضافي لهم لتتمكن من ترتيبهم.</p>
+          </div>
+        ) : (
+          <div className="max-h-[50vh] overflow-y-auto space-y-2 p-1">
+            {items.map((p, idx) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-border bg-card/70 hover:border-primary/40 transition-all"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground font-black text-xs shadow-2xs">
+                    {idx + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-extrabold text-foreground flex items-center gap-2 truncate">
+                      <span>{p.name}</span>
+                      {p.is_premium ? (
+                        <span className="rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2 py-0.5 text-[10px] font-bold">
+                          مميز
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {getProviderProfessionTitle(p)} · {p.areas?.name || "المحافظة"} · <span dir="ltr">{p.phone}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Move Controls */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    disabled={idx === 0 || busy}
+                    onClick={() => moveToExtremity(idx, true)}
+                    title="نقل إلى أول القائمة"
+                    aria-label="نقل إلى أول القائمة"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-25 transition-colors"
+                  >
+                    <ArrowUpToLine className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === 0 || busy}
+                    onClick={() => move(idx, -1)}
+                    title="تحريك لأعلى خطوة واحدة"
+                    aria-label="تحريك لأعلى"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-25 transition-colors"
+                  >
+                    <ArrowUp className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === items.length - 1 || busy}
+                    onClick={() => move(idx, 1)}
+                    title="تحريك لأسفل خطوة واحدة"
+                    aria-label="تحريك لأسفل"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-25 transition-colors"
+                  >
+                    <ArrowDown className="size-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={idx === items.length - 1 || busy}
+                    onClick={() => moveToExtremity(idx, false)}
+                    title="نقل إلى آخر القائمة"
+                    aria-label="نقل إلى آخر القائمة"
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-25 transition-colors"
+                  >
+                    <ArrowDownToLine className="size-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Footer Actions */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+          <button
+            type="button"
+            disabled={busy || items.length === 0}
+            onClick={handleReset}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-destructive transition-colors disabled:opacity-30"
+          >
+            <RotateCcw className="size-3.5" />
+            <span>استعادة الترتيب الافتراضي (التلقائي)</span>
+          </button>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onClose}
+              className="rounded-xl border border-border px-4 py-2 text-xs font-bold hover:bg-secondary transition-colors"
+            >
+              إلغاء
+            </button>
+            <button
+              type="button"
+              disabled={busy || items.length === 0}
+              onClick={handleSave}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2 text-xs font-extrabold text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-all shadow-xs"
+            >
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+              <span>حفظ الترتيب</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type CatForm = { id?: string; name: string; icon: string; sort_order: number; status: string; unit_title: string };
 
 export function Categories({
@@ -68,13 +361,17 @@ export function Categories({
   const rows = categories.data ?? [];
   const [form, setForm] = useState<CatForm | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
+  const [orderingCategory, setOrderingCategory] = useState<Category | null>(null);
 
   if (prefill && !form) {
     setForm({ name: prefill, icon: "Wrench", sort_order: rows.length + 1, status: "active", unit_title: "" });
     onPrefillUsed?.();
   }
 
-  const count = (id: string) => (Array.isArray(providers.data) ? providers.data : []).filter((p) => p.category_id === id).length;
+  const count = (id: string) =>
+    (Array.isArray(providers.data) ? providers.data : []).filter(
+      (p) => p.category_id === id || ((p as any).assigned_category_ids && (p as any).assigned_category_ids.includes(id))
+    ).length;
 
   if (categories.isLoading) return <p className="p-8 text-center text-muted-foreground font-bold">جاري تحميل الأقسام...</p>;
   if (categories.isError) return <AdminErrorState title="تعذر تحميل الأقسام" error={categories.error} onRetry={() => categories.refetch()} />;
@@ -219,42 +516,62 @@ export function Categories({
               </p>
               <p className="text-xs text-muted-foreground">{cnt} مسجل · ترتيب {c.sort_order}</p>
             </div>
-            <div className="flex shrink-0 gap-0.5">
-              <button aria-label="لأعلى" title="لأعلى" disabled={i === 0} onClick={() => move(c, -1)} className="rounded-lg p-2 hover:bg-secondary disabled:opacity-30"><ArrowUp className="size-4" /></button>
-              <button aria-label="لأسفل" title="لأسفل" disabled={i === rows.length - 1} onClick={() => move(c, 1)} className="rounded-lg p-2 hover:bg-secondary disabled:opacity-30"><ArrowDown className="size-4" /></button>
+            <div className="flex shrink-0 items-center gap-1">
               <button
-                aria-label="تعديل"
-                title="تعديل"
-                onClick={() => setForm({
-                  id: c.id,
-                  name: c.name,
-                  icon: c.icon ?? "Wrench",
-                  sort_order: c.sort_order,
-                  status: c.status,
-                  unit_title: customUnit ?? "",
-                })}
-                className="rounded-lg p-2 hover:bg-secondary"
+                type="button"
+                onClick={() => setOrderingCategory(c)}
+                className="flex items-center gap-1 rounded-xl border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-bold text-primary hover:bg-primary/20 transition-all shadow-2xs"
+                title={`ترتيب صنايعية قسم ${c.name}`}
               >
-                <Pencil className="size-5" />
+                <ListOrdered className="size-3.5" />
+                <span>ترتيب الصنايعية ({cnt})</span>
               </button>
-              <button aria-label="إخفاء/إظهار" title="إخفاء/إظهار" onClick={() => toggle(c)} className="rounded-lg p-2 hover:bg-secondary">
-                {c.status === "active" ? <EyeOff className="size-5" /> : <Eye className="size-5 text-muted-foreground" />}
-              </button>
-              {!isModerator && (
+
+              <div className="flex items-center gap-0.5 border-r border-border pr-1">
+                <button aria-label="لأعلى" title="لأعلى" disabled={i === 0} onClick={() => move(c, -1)} className="rounded-lg p-2 hover:bg-secondary disabled:opacity-30"><ArrowUp className="size-4" /></button>
+                <button aria-label="لأسفل" title="لأسفل" disabled={i === rows.length - 1} onClick={() => move(c, 1)} className="rounded-lg p-2 hover:bg-secondary disabled:opacity-30"><ArrowDown className="size-4" /></button>
                 <button
-                  aria-label="حذف"
-                  title={cnt > 0 ? "لا يمكن الحذف لوجود صنايعية" : "حذف القسم"}
-                  onClick={() => deleteCategory(c)}
-                  className="rounded-lg p-2 text-destructive hover:bg-destructive/10"
+                  aria-label="تعديل"
+                  title="تعديل"
+                  onClick={() => setForm({
+                    id: c.id,
+                    name: c.name,
+                    icon: c.icon ?? "Wrench",
+                    sort_order: c.sort_order,
+                    status: c.status,
+                    unit_title: customUnit ?? "",
+                  })}
+                  className="rounded-lg p-2 hover:bg-secondary"
                 >
-                  <Trash2 className="size-5" />
+                  <Pencil className="size-5" />
                 </button>
-              )}
+                <button aria-label="إخفاء/إظهار" title="إخفاء/إظهار" onClick={() => toggle(c)} className="rounded-lg p-2 hover:bg-secondary">
+                  {c.status === "active" ? <EyeOff className="size-5" /> : <Eye className="size-5 text-muted-foreground" />}
+                </button>
+                {!isModerator && (
+                  <button
+                    aria-label="حذف"
+                    title={cnt > 0 ? "لا يمكن الحذف لوجود صنايعية" : "حذف القسم"}
+                    onClick={() => deleteCategory(c)}
+                    className="rounded-lg p-2 text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="size-5" />
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         );
       })}
       {confirmState ? <ConfirmModal state={confirmState} onClose={() => setConfirmState(null)} /> : null}
+      {orderingCategory ? (
+        <CategoryProviderOrderModal
+          category={orderingCategory}
+          allProviders={providers.data ?? []}
+          settings={settings.data ?? {}}
+          onClose={() => setOrderingCategory(null)}
+        />
+      ) : null}
     </div>
   );
 }

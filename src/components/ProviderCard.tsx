@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Star, MapPin, BadgeCheck, Award, Zap, Building2 } from "lucide-react";
+import { Star, MapPin, BadgeCheck, Award, Zap, Building2, Truck } from "lucide-react";
 import { isPremiumActive, getCategoryUnit, getProviderProfessionTitle, type PublicProvider as ProviderWithRefs } from "@/lib/directory";
 import { ContactButtons } from "@/components/ContactButtons";
 import { parseWorkingHours, getOpenStatus } from "@/lib/working-hours";
@@ -89,6 +89,18 @@ export function EmergencyBadge() {
   );
 }
 
+export function DeliveryBadge() {
+  return (
+    <span
+      title="يوفر خدمة التوصيل للمنازل"
+      aria-label="توصيل للمنازل"
+      className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-black text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/30"
+    >
+      <Truck className="size-3.5" /> توصيل للمنازل
+    </span>
+  );
+}
+
 export function ProviderCard({
   provider,
   ratingSummary,
@@ -125,6 +137,7 @@ export function ProviderCard({
           <h3 className="text-lg font-extrabold text-foreground">{provider.name}</h3>
           <div className="flex flex-wrap justify-end gap-1">
             {hoursData?.isEmergency24h ? <EmergencyBadge /> : null}
+            {provider.has_delivery ? <DeliveryBadge /> : null}
             {provider.is_verified ? <VerifiedBadge /> : null}
             {premium ? <PremiumBadge /> : null}
           </div>

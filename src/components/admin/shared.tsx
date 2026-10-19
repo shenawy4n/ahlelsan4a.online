@@ -42,7 +42,7 @@ export function useAll() {
             const { data: setRes } = await supabase
               .from("app_settings")
               .select("key, value")
-              .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%");
+              .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%");
             const sMap: Record<string, string> = {};
             for (const s of (setRes ?? []) as { key: string; value: string }[]) {
               if (s.key && s.value) sMap[s.key] = s.value;
@@ -67,6 +67,7 @@ export function useAll() {
                 }
               }
               (p as any).assigned_category_ids = assigned;
+              p.has_delivery = Boolean(sMap[`prov_deliv_${p.id}`] === "true" || sMap[`prov_deliv_${p.id}`] === "1");
             }
             return list;
           } catch {

@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { PhoneCall } from "lucide-react";
 import { settingsQuery } from "@/lib/directory";
 import { PWAInstallButton } from "@/components/PWAInstallButton";
 
@@ -36,6 +37,13 @@ export function SiteHeader() {
         </Link>
 
         <div className="flex items-center gap-2 shrink-0">
+          <Link
+            to="/contact"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-extrabold text-foreground hover:bg-secondary transition-colors"
+          >
+            <PhoneCall className="size-3.5 text-primary" />
+            <span className="hidden sm:inline">تواصل معنا</span>
+          </Link>
           <PWAInstallButton />
         </div>
       </div>

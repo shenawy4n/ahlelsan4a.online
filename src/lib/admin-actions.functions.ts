@@ -33,10 +33,11 @@ export const getAdminProvidersServerFn = createServerFn({ method: "GET" })
     const { data: unitSettings } = await supabaseAdmin
       .from("app_settings")
       .select("key, value")
-      .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%");
+      .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%");
     const unitsMap: Record<string, string> = {};
     const provUnitsMap: Record<string, string> = {};
     const provCatsMap: Record<string, string[]> = {};
+    const provDelivMap: Record<string, boolean> = {};
     for (const u of (unitSettings ?? []) as { key: string; value: string }[]) {
       if (u.key && u.value) {
         if (u.key.startsWith("cat_unit_")) {
@@ -52,6 +53,8 @@ export const getAdminProvidersServerFn = createServerFn({ method: "GET" })
           } catch {
             // ignore malformed
           }
+        } else if (u.key.startsWith("prov_deliv_")) {
+          provDelivMap[u.key] = u.value === "true" || u.value === "1";
         }
       }
     }
@@ -65,6 +68,7 @@ export const getAdminProvidersServerFn = createServerFn({ method: "GET" })
       p.profession_title = provUnitsMap[`prov_unit_${p.id}`]?.trim() || null;
       (p as any).assigned_category_ids =
         provCatsMap[`prov_cats_${p.id}`] || ((p as any).category_id ? [(p as any).category_id] : []);
+      p.has_delivery = Boolean(provDelivMap[`prov_deliv_${p.id}`]);
     }
     return list;
   });
@@ -102,6 +106,7 @@ export const deleteProvidersAdminFn = createServerFn({ method: "POST" })
       supabaseAdmin.from("reports").delete().in("provider_id", data.ids),
       supabaseAdmin.from("app_settings").delete().in("key", data.ids.map((id) => `prov_unit_${id}`)),
       supabaseAdmin.from("app_settings").delete().in("key", data.ids.map((id) => `prov_cats_${id}`)),
+      supabaseAdmin.from("app_settings").delete().in("key", data.ids.map((id) => `prov_deliv_${id}`)),
     ]);
 
     const { error } = await supabaseAdmin.from("providers").delete().in("id", data.ids);
@@ -601,7 +606,7 @@ export const saveSettingsAdminFn = createServerFn({ method: "POST" })
 
     const payload = data.rows.map((r) => ({
       key: String(r.key).trim(),
-      value: r.value !== null && r.value !== undefined ? String(r.value).trim() || null : null,
+      value: r.value !== null && r.value !== undefined ? String(r.value).trim() : "",
       updated_at: new Date().toISOString(),
     }));
 
@@ -624,5 +629,47 @@ export const saveSettingsAdminFn = createServerFn({ method: "POST" })
 
     return { ok: true as const, count: payload.length };
   });
+
+/** Save category-specific provider order (Admin only) */
+export const saveCategoryProviderOrderAdminFn = createServerFn({ method: "POST" })
+  .middleware([requireAdminAuth])
+  .validator((d: { categoryId: string; providerIds: string[] }) => d)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+
+    if (!data.categoryId) {
+      throw new Response(
+        JSON.stringify({ ok: false, message: "معرف القسم مطلوب" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const key = `cat_prov_order_${data.categoryId.trim()}`;
+    const value = JSON.stringify(Array.isArray(data.providerIds) ? data.providerIds : []);
+
+    const { error } = await supabaseAdmin.from("app_settings").upsert({
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error("[saveCategoryProviderOrderAdminFn error]", error);
+      throw new Response(
+        JSON.stringify({ ok: false, message: error.message || "فشل حفظ ترتيب الصنايعية" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const { invalidateCategoryUnitsCache } = await import("./directory.functions");
+      invalidateCategoryUnitsCache();
+    } catch {
+      // non-blocking
+    }
+
+    return { ok: true as const };
+  });
+
 
 

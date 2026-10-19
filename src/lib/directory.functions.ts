@@ -28,12 +28,15 @@ interface MinimalActiveProvider {
   created_at: string;
   profession_title?: string | null;
   assigned_category_ids?: string[];
+  has_delivery?: boolean | null;
 }
 
 export interface DirectorySettingsMap {
   categoryUnits: Record<string, string>;
   providerProfessions: Record<string, string>;
   providerCategories: Record<string, string[]>;
+  providerDelivery: Record<string, boolean>;
+  categoryProviderOrders: Record<string, string[]>;
 }
 
 // In-memory cache for 60 seconds of directory metadata
@@ -67,11 +70,13 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
   const { data } = await client
     .from("app_settings")
     .select("key, value")
-    .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%");
+    .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%,key.like.cat_prov_order_%");
 
   const categoryUnits: Record<string, string> = {};
   const providerProfessions: Record<string, string> = {};
   const providerCategories: Record<string, string[]> = {};
+  const providerDelivery: Record<string, boolean> = {};
+  const categoryProviderOrders: Record<string, string[]> = {};
 
   if (Array.isArray(data)) {
     for (const row of data) {
@@ -80,6 +85,17 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
         categoryUnits[row.key] = row.value.trim();
       } else if (row.key.startsWith("prov_unit_")) {
         providerProfessions[row.key] = row.value.trim();
+      } else if (row.key.startsWith("prov_deliv_")) {
+        providerDelivery[row.key] = row.value === "true" || row.value === "1";
+      } else if (row.key.startsWith("cat_prov_order_")) {
+        try {
+          const parsed = JSON.parse(row.value);
+          if (Array.isArray(parsed)) {
+            categoryProviderOrders[row.key] = parsed;
+          }
+        } catch {
+          // ignore malformed
+        }
       } else if (row.key.startsWith("prov_cats_")) {
         try {
           const parsed = JSON.parse(row.value);
@@ -97,6 +113,8 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
     categoryUnits,
     providerProfessions,
     providerCategories,
+    providerDelivery,
+    categoryProviderOrders,
   };
   directorySettingsCache = { timestamp: now, data: result };
   return result;
@@ -127,10 +145,12 @@ async function getCachedActiveProviders(client: any): Promise<MinimalActiveProvi
     const enriched = (providersRes.data as MinimalActiveProvider[]).map((p) => {
       const customTitle = dirSettings.providerProfessions[`prov_unit_${p.id}`] || null;
       const assignedCats = dirSettings.providerCategories[`prov_cats_${p.id}`] || (p.category_id ? [p.category_id] : []);
+      const hasDeliv = Boolean(dirSettings.providerDelivery[`prov_deliv_${p.id}`]);
       return {
         ...p,
         profession_title: customTitle,
         assigned_category_ids: assignedCats,
+        has_delivery: hasDeliv,
       };
     });
 
@@ -550,10 +570,11 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
     const rawSearch = opts.search ? opts.search.trim().slice(0, 60) : "";
 
     // 1. Fetch all active providers with minimal columns using 60s in-memory cache
-    const allActive = await getCachedActiveProviders(supabase);
-    const [categories, areas] = await Promise.all([
+    const [allActive, categories, areas, dirSettings] = await Promise.all([
+      getCachedActiveProviders(supabase),
       getCachedCategories(supabase),
       getCachedAreas(supabase),
+      getCachedDirectorySettings(supabase),
     ]);
     const catMap = new Map(categories.map((c) => [c.id, c.name]));
     const areaMap = new Map(areas.map((a) => [a.id, a.name]));
@@ -615,12 +636,29 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
     };
 
     // 4. Order items according to requested view:
-    // Inside each group: premium first, then newest
+    // Category manual order applies ONLY when categoryId is specified
+    const manualOrder = opts.categoryId
+      ? dirSettings.categoryProviderOrders[`cat_prov_order_${opts.categoryId}`] || []
+      : [];
+    const orderMap = new Map<string, number>();
+    manualOrder.forEach((id, idx) => orderMap.set(id, idx));
+
     const comparePremiumThenNewest = (a: MinimalActiveProvider, b: MinimalActiveProvider) => {
       const aPrem = isPremiumActive(a) ? 1 : 0;
       const bPrem = isPremiumActive(b) ? 1 : 0;
       if (aPrem !== bPrem) return bPrem - aPrem;
-      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      const dateDiff = new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.id.localeCompare(b.id);
+    };
+
+    const compareCategoryOrdering = (a: MinimalActiveProvider, b: MinimalActiveProvider) => {
+      if (opts.categoryId && manualOrder.length > 0) {
+        const aPos = orderMap.has(a.id) ? orderMap.get(a.id)! : Infinity;
+        const bPos = orderMap.has(b.id) ? orderMap.get(b.id)! : Infinity;
+        if (aPos !== bPos) return aPos - bPos;
+      }
+      return comparePremiumThenNewest(a, b);
     };
 
     let orderedProviders: MinimalActiveProvider[];
@@ -631,29 +669,29 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return isEmerg || isOpenNow(p.working_hours) === true;
         })
-        .sort(comparePremiumThenNewest);
+        .sort(compareCategoryOrdering);
 
       const closedGroup = matchingProviders
         .filter((p) => {
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return !isEmerg && isOpenNow(p.working_hours) === false;
         })
-        .sort(comparePremiumThenNewest);
+        .sort(compareCategoryOrdering);
 
       const notSetGroup = matchingProviders
         .filter((p) => {
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return !isEmerg && isOpenNow(p.working_hours) === null;
         })
-        .sort(comparePremiumThenNewest);
+        .sort(compareCategoryOrdering);
 
       orderedProviders = [...openGroup, ...closedGroup, ...notSetGroup];
     } else if (opts.filterMode === "emergency_now") {
       orderedProviders = matchingProviders
         .filter((p) => Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours)))
-        .sort(comparePremiumThenNewest);
+        .sort(compareCategoryOrdering);
     } else {
-      orderedProviders = [...matchingProviders].sort(comparePremiumThenNewest);
+      orderedProviders = [...matchingProviders].sort(compareCategoryOrdering);
     }
 
     // 5. Slice requested page of items
@@ -688,7 +726,6 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
       fullRows = rowsRes.data ?? [];
     }
 
-    const dirSettings = await getCachedDirectorySettings(supabase);
     const pageRatings: Record<string, { sum: number; count: number }> = {};
     for (const rev of (revsRes.data ?? []) as { provider_id: string; rating: number }[]) {
       if (!rev.provider_id) continue;
@@ -707,6 +744,7 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
       }
       r.profession_title = dirSettings.providerProfessions[`prov_unit_${r.id}`]?.trim() || null;
       r.assigned_category_ids = dirSettings.providerCategories[`prov_cats_${r.id}`] || (r.category_id ? [r.category_id] : []);
+      r.has_delivery = Boolean(dirSettings.providerDelivery[`prov_deliv_${r.id}`]);
 
       const rStats = pageRatings[r.id];
       const revCount = rStats ? rStats.count : 0;
@@ -751,6 +789,7 @@ export const getProviderDetailServerFn = createServerFn({ method: "POST" })
       }
       (data as any).profession_title = dirSettings.providerProfessions[`prov_unit_${id}`]?.trim() || null;
       (data as any).assigned_category_ids = dirSettings.providerCategories[`prov_cats_${id}`] || (data.category_id ? [data.category_id] : []);
+      (data as any).has_delivery = Boolean(dirSettings.providerDelivery[`prov_deliv_${id}`]);
 
       const revs = revsRes.data ?? [];
       const count = revs.length;
