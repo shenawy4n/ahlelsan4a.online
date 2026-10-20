@@ -27,6 +27,7 @@ interface MinimalActiveProvider {
   premium_expires_at: string | null;
   created_at: string;
   profession_title?: string | null;
+  portfolio_url?: string | null;
   assigned_category_ids?: string[];
   has_delivery?: boolean | null;
 }
@@ -36,6 +37,7 @@ export interface DirectorySettingsMap {
   providerProfessions: Record<string, string>;
   providerCategories: Record<string, string[]>;
   providerDelivery: Record<string, boolean>;
+  providerPortfolios: Record<string, string>;
   categoryProviderOrders: Record<string, string[]>;
 }
 
@@ -70,12 +72,13 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
   const { data } = await client
     .from("app_settings")
     .select("key, value")
-    .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%,key.like.cat_prov_order_%");
+    .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%,key.like.cat_prov_order_%,key.like.prov_portfolio_%");
 
   const categoryUnits: Record<string, string> = {};
   const providerProfessions: Record<string, string> = {};
   const providerCategories: Record<string, string[]> = {};
   const providerDelivery: Record<string, boolean> = {};
+  const providerPortfolios: Record<string, string> = {};
   const categoryProviderOrders: Record<string, string[]> = {};
 
   if (Array.isArray(data)) {
@@ -87,6 +90,8 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
         providerProfessions[row.key] = row.value.trim();
       } else if (row.key.startsWith("prov_deliv_")) {
         providerDelivery[row.key] = row.value === "true" || row.value === "1";
+      } else if (row.key.startsWith("prov_portfolio_")) {
+        providerPortfolios[row.key] = row.value.trim();
       } else if (row.key.startsWith("cat_prov_order_")) {
         try {
           const parsed = JSON.parse(row.value);
@@ -114,6 +119,7 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
     providerProfessions,
     providerCategories,
     providerDelivery,
+    providerPortfolios,
     categoryProviderOrders,
   };
   directorySettingsCache = { timestamp: now, data: result };
@@ -146,9 +152,11 @@ async function getCachedActiveProviders(client: any): Promise<MinimalActiveProvi
       const customTitle = dirSettings.providerProfessions[`prov_unit_${p.id}`] || null;
       const assignedCats = dirSettings.providerCategories[`prov_cats_${p.id}`] || (p.category_id ? [p.category_id] : []);
       const hasDeliv = Boolean(dirSettings.providerDelivery[`prov_deliv_${p.id}`]);
+      const portfolioUrl = dirSettings.providerPortfolios[`prov_portfolio_${p.id}`] || null;
       return {
         ...p,
         profession_title: customTitle,
+        portfolio_url: portfolioUrl,
         assigned_category_ids: assignedCats,
         has_delivery: hasDeliv,
       };
@@ -743,6 +751,7 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
         r.categories.unit_title = customUnit || (r.categories as any).unit_title || null;
       }
       r.profession_title = dirSettings.providerProfessions[`prov_unit_${r.id}`]?.trim() || null;
+      r.portfolio_url = dirSettings.providerPortfolios[`prov_portfolio_${r.id}`]?.trim() || null;
       r.assigned_category_ids = dirSettings.providerCategories[`prov_cats_${r.id}`] || (r.category_id ? [r.category_id] : []);
       r.has_delivery = Boolean(dirSettings.providerDelivery[`prov_deliv_${r.id}`]);
 
@@ -788,6 +797,7 @@ export const getProviderDetailServerFn = createServerFn({ method: "POST" })
         (data as any).categories.unit_title = customUnit || (data as any).categories.unit_title || null;
       }
       (data as any).profession_title = dirSettings.providerProfessions[`prov_unit_${id}`]?.trim() || null;
+      (data as any).portfolio_url = dirSettings.providerPortfolios[`prov_portfolio_${id}`]?.trim() || null;
       (data as any).assigned_category_ids = dirSettings.providerCategories[`prov_cats_${id}`] || (data.category_id ? [data.category_id] : []);
       (data as any).has_delivery = Boolean(dirSettings.providerDelivery[`prov_deliv_${id}`]);
 

@@ -9,12 +9,15 @@ import {
   generateScheduleSummary,
   type StructuredWorkingHours,
 } from "@/lib/working-hours.ts";
+import { getProviderProfessionTitle, format24HourMessage } from "@/lib/directory";
 
 interface WorkingHoursViewProps {
   workingHoursRaw: string | null | undefined;
+  professionTitle?: string | null | undefined;
+  provider?: any;
 }
 
-export function WorkingHoursView({ workingHoursRaw }: WorkingHoursViewProps) {
+export function WorkingHoursView({ workingHoursRaw, professionTitle, provider }: WorkingHoursViewProps) {
   const [expanded, setExpanded] = useState(false);
 
   const hours = parseWorkingHours(workingHoursRaw);
@@ -23,6 +26,21 @@ export function WorkingHoursView({ workingHoursRaw }: WorkingHoursViewProps) {
   const status = getOpenStatus(hours);
   const { dayKey: currentDayKey } = getCairoNow();
   const summaryText = generateScheduleSummary(hours);
+
+  const resolvedTitle = professionTitle || (provider ? getProviderProfessionTitle(provider) : "");
+  const cleanTitle = (resolvedTitle || "").trim();
+  const isFeminine = /[ة]$/.test(cleanTitle);
+
+  let definiteTitle = cleanTitle;
+  if (cleanTitle && !cleanTitle.startsWith("ال") && !cleanTitle.includes(" ")) {
+    definiteTitle = `ال${cleanTitle}`;
+  }
+
+  const emergencyBannerText = !cleanTitle || cleanTitle === "مقدم خدمة" || cleanTitle === "خدمة"
+    ? "متاح لاستقبال طلبات الطوارئ والأعطال والحالات المستعجلة على مدار الساعة طوال أيام الأسبوع."
+    : isFeminine
+      ? `${definiteTitle} متاحة لاستقبال طلبات الطوارئ والحالات المستعجلة على مدار الساعة طوال أيام الأسبوع.`
+      : `${definiteTitle} متاح لاستقبال طلبات الطوارئ والأعطال المستعجلة على مدار الساعة طوال أيام الأسبوع.`;
 
   return (
     <div className="border-t border-border py-4">
@@ -41,7 +59,7 @@ export function WorkingHoursView({ workingHoursRaw }: WorkingHoursViewProps) {
         {/* Real-time Status Badge */}
         {status.badgeType === "emergency" ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-3 py-1 text-xs font-black text-warning ring-1 ring-warning/30">
-            <Zap className="size-3.5 fill-current" /> متاح طوارئ ٢٤ ساعة
+            <Zap className="size-3.5 fill-current" /> {format24HourMessage(cleanTitle)}
           </span>
         ) : status.isOpen === true ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-black text-success ring-1 ring-success/30">
@@ -69,7 +87,7 @@ export function WorkingHoursView({ workingHoursRaw }: WorkingHoursViewProps) {
           <Zap className="mt-0.5 size-4 shrink-0 text-warning" />
           <div>
             <span className="font-extrabold">خدمة الطوارئ ٢٤/٧:</span>
-            <span className="mr-1">هذا الصنايعي يستقبل طلبات الطوارئ والأعطال المستعجلة على مدار الساعة طوال أيام الأسبوع.</span>
+            <span className="mr-1">{emergencyBannerText}</span>
           </div>
         </div>
       )}

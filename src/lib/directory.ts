@@ -32,6 +32,7 @@ export type Provider = {
   workshop_name?: string | null;
   workshop_address?: string | null;
   photo_url: string | null;
+  portfolio_url?: string | null;
   has_delivery?: boolean | null;
   status: string;
   is_premium: boolean;
@@ -48,6 +49,7 @@ export type ProviderWithRefs = Provider & {
   areas: { id: string; name: string } | null;
   experience_options: { id: string; label: string } | null;
   profession_title?: string | null;
+  portfolio_url?: string | null;
   assigned_category_ids?: string[];
   average_rating?: number;
   review_count?: number;
@@ -57,6 +59,7 @@ export type ProviderWithRefs = Provider & {
 export type PublicProvider = Omit<ProviderWithRefs, "phone" | "secondary_phone" | "whatsapp" | "has_whatsapp"> & {
   has_whatsapp: boolean;
   profession_title?: string | null;
+  portfolio_url?: string | null;
   assigned_category_ids?: string[];
   average_rating?: number;
   review_count?: number;
@@ -284,6 +287,76 @@ export function formatAvailableNotice(count: number, unit?: string | null): stri
   return `متاح ${count} ${cleanUnit}`;
 }
 
+/**
+ * Resolves natural Arabic 24-hour availability sentence from a provider's profession title.
+ * - Single-word masculine: "الكهربائي متاح 24 ساعة", "الطبيب متاح 24 ساعة"
+ * - Feminine (ends with ة): "الصيدلية متاحة 24 ساعة", "الورشة متاحة 24 ساعة"
+ * - Multi-word: "طبيب أسنان متاح 24 ساعة", "ورشة صيانة متاحة 24 ساعة"
+ * - Missing/neutral: "متاح 24 ساعة"
+ */
+export function format24HourMessage(title?: string | null): string {
+  const raw = (title || "").trim();
+  if (!raw || raw === "مقدم خدمة" || raw === "خدمة") {
+    return "متاح 24 ساعة";
+  }
+
+  const isFeminine = /[ة]$/.test(raw);
+  const suffix = isFeminine ? "متاحة 24 ساعة" : "متاح 24 ساعة";
+
+  let definiteTitle = raw;
+  if (!raw.startsWith("ال") && !raw.includes(" ")) {
+    definiteTitle = `ال${raw}`;
+  }
+
+  return `${definiteTitle} ${suffix}`;
+}
+
+export function getProvider24HourMessage(
+  provider?: Parameters<typeof getProviderProfessionTitle>[0] | string | null,
+  fallbackCustomUnit?: string | null
+): string {
+  if (typeof provider === "string") {
+    return format24HourMessage(provider);
+  }
+  const resolvedTitle = getProviderProfessionTitle(provider, fallbackCustomUnit);
+  return format24HourMessage(resolvedTitle);
+}
+
+/**
+ * Validates and sanitizes external portfolio / work-samples URL.
+ * Only accepts http: and https: protocols.
+ * Explicitly rejects unsafe schemes like javascript:, data:, vbscript:.
+ */
+export function sanitizeExternalUrl(url: string | null | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (/^(javascript|data|vbscript|file):/i.test(trimmed)) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    if (/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(trimmed)) {
+      try {
+        const parsed = new URL(`https://${trimmed}`);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          return parsed.href;
+        }
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+}
+
+export function isValidExternalUrl(url: string | null | undefined): boolean {
+  return sanitizeExternalUrl(url) !== null;
+}
+
 export interface ProvidersTotals {
   all: number;
   openNow: number;
@@ -378,7 +451,7 @@ export function providerQuery(id: string) {
           supabase
             .from("app_settings")
             .select("key, value")
-            .or(`key.eq.prov_unit_${id},key.eq.prov_cats_${id},key.like.cat_unit_%`),
+            .or(`key.eq.prov_unit_${id},key.eq.prov_cats_${id},key.eq.prov_portfolio_${id},key.eq.prov_deliv_${id},key.like.cat_unit_%`),
         ]);
         if (!provRes.error && provRes.data) {
           const p = provRes.data as any;
@@ -394,6 +467,8 @@ export function providerQuery(id: string) {
             if (s.key && s.value) sMap[s.key] = s.value;
           }
           p.profession_title = sMap[`prov_unit_${id}`]?.trim() || null;
+          p.portfolio_url = sanitizeExternalUrl(sMap[`prov_portfolio_${id}`]) || null;
+          p.has_delivery = Boolean(sMap[`prov_deliv_${id}`] === "true" || sMap[`prov_deliv_${id}`] === "1");
           if (sMap[`prov_cats_${id}`]) {
             try {
               p.assigned_category_ids = JSON.parse(sMap[`prov_cats_${id}`]);

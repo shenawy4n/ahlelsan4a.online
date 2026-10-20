@@ -3,7 +3,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Eye, EyeOff, Star, BadgeCheck, AlertTriangle, ExternalLink, ArrowRight, Truck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { isPremiumActive, settingsQuery, getCategoryUnit, getProviderProfessionTitle, type Area, type Category, type ExperienceOption, type ProviderWithRefs, normalizeEgPhone } from "@/lib/directory";
+import { isPremiumActive, settingsQuery, getCategoryUnit, getProviderProfessionTitle, sanitizeExternalUrl, type Area, type Category, type ExperienceOption, type ProviderWithRefs, normalizeEgPhone } from "@/lib/directory";
 import { input, btnGhost, useAll, isFlagged } from "./shared";
 import { WorkingHoursEditor } from "./WorkingHoursEditor";
 import { ProviderPhotoUploader } from "./ProviderPhotoUploader";
@@ -18,10 +18,11 @@ type Form = {
   description: string; services: string; price_description: string; working_hours: string; photo_url: string;
   status: string; is_premium: boolean; premium_expires_at: string; experience_id: string; is_verified: boolean;
   profession_title: string;
+  portfolio_url: string;
   assigned_category_ids: string[];
   has_delivery: boolean;
 };
-const empty: Form = { name: "", category_id: "", area_id: "", phone: "", secondary_phone: "", whatsapp: "", description: "", services: "", price_description: "", working_hours: "", photo_url: "", status: "active", is_premium: false, premium_expires_at: "", experience_id: "", is_verified: false, profession_title: "", assigned_category_ids: [], has_delivery: false };
+const empty: Form = { name: "", category_id: "", area_id: "", phone: "", secondary_phone: "", whatsapp: "", description: "", services: "", price_description: "", working_hours: "", photo_url: "", status: "active", is_premium: false, premium_expires_at: "", experience_id: "", is_verified: false, profession_title: "", portfolio_url: "", assigned_category_ids: [], has_delivery: false };
 
 function toForm(p: ProviderWithRefs): Form {
   const assigned = Array.isArray((p as any).assigned_category_ids) && (p as any).assigned_category_ids.length > 0
@@ -46,6 +47,7 @@ function toForm(p: ProviderWithRefs): Form {
     experience_id: p.experience_id ?? "",
     is_verified: p.is_verified,
     profession_title: p.profession_title ?? "",
+    portfolio_url: (p as any).portfolio_url ?? "",
     assigned_category_ids: assigned,
     has_delivery: Boolean((p as any).has_delivery),
   };
@@ -381,6 +383,16 @@ function ProviderForm({
           await supabase.from("app_settings").upsert({ key: `prov_deliv_${newId}`, value: "true", updated_at: new Date().toISOString() });
         }
 
+        // Save portfolio URL into app_settings (prov_portfolio_{newId})
+        const cleanPortfolio = sanitizeExternalUrl(f.portfolio_url);
+        if (cleanPortfolio) {
+          await supabase.from("app_settings").upsert({
+            key: `prov_portfolio_${newId}`,
+            value: cleanPortfolio,
+            updated_at: new Date().toISOString(),
+          });
+        }
+
         try {
           const { invalidateCategoryCacheServerFn } = await import("@/lib/directory.functions");
           await invalidateCategoryCacheServerFn();
@@ -473,6 +485,19 @@ function ProviderForm({
           await supabase.from("app_settings").upsert({ key: delivKey, value: "true", updated_at: new Date().toISOString() });
         } else {
           await supabase.from("app_settings").delete().eq("key", delivKey);
+        }
+
+        // Save or delete portfolio URL in app_settings (prov_portfolio_{f.id})
+        const portfolioKey = `prov_portfolio_${f.id}`;
+        const cleanPortfolio = sanitizeExternalUrl(f.portfolio_url);
+        if (cleanPortfolio) {
+          await supabase.from("app_settings").upsert({
+            key: portfolioKey,
+            value: cleanPortfolio,
+            updated_at: new Date().toISOString(),
+          });
+        } else if (f.portfolio_url.trim() === "") {
+          await supabase.from("app_settings").delete().eq("key", portfolioKey);
         }
 
         try {
@@ -663,6 +688,22 @@ function ProviderForm({
                 getCategoryUnit(categories.find((c) => c.id === f.category_id)?.name) ||
                 "مقدم خدمة")}
           </span>
+        </p>
+      </div>
+      <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+        <label className="grid gap-1.5 text-sm font-bold text-foreground">
+          <span>رابط الأعمال أو معرض الأعمال</span>
+          <input
+            value={f.portfolio_url}
+            onChange={set("portfolio_url")}
+            placeholder="https://... (معرض أعمال، فيسبوك، إنستجرام، يوتيوب)"
+            className={input}
+            dir="ltr"
+            type="url"
+          />
+        </label>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          أضف رابطًا يعرض أعمال مقدم الخدمة أو نماذج من شغله
         </p>
       </div>
       <label className="grid gap-1 text-sm font-bold">سنوات الخبرة<select value={f.experience_id} onChange={set("experience_id")} className={input}><option value="">غير محدد</option>{experience.map((x) => <option key={x.id} value={x.id}>{x.label}{x.status !== "active" ? " (غير مفعل)" : ""}</option>)}</select></label>

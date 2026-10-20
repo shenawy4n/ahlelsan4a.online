@@ -70,20 +70,115 @@ export async function whatsappProvider(providerId: string) {
   open(href, true);
 }
 
-export async function shareProviderViaWhatsapp(provider: {
+export type ShareResult = "shared" | "copied" | "cancelled";
+
+export interface ShareProviderData {
   id: string;
   name: string;
   categoryName?: string | null | undefined;
   categoryUnitTitle?: string | null | undefined;
   areaName?: string | null | undefined;
   isEmergency24h?: boolean | undefined;
-}) {
+}
+
+/**
+ * Copies text using modern navigator.clipboard or fallback textarea execCommand.
+ */
+async function copyToClipboard(text: string): Promise<boolean> {
+  if (typeof navigator !== "undefined" && navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Fallback to execCommand below
+    }
+  }
+
+  try {
+    if (typeof document === "undefined") return false;
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.left = "-999999px";
+    textArea.style.top = "-999999px";
+    textArea.setAttribute("readonly", "");
+    document.body.appendChild(textArea);
+    textArea.select();
+    const successful = document.execCommand("copy");
+    textArea.remove();
+    return successful;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * General device share action using navigator.share with fallback to clipboard copy.
+ * Uses the existing profession title resolution hierarchy.
+ * Never hardcodes "صنايعي".
+ * Excludes private phone numbers or review verification data.
+ */
+export async function shareProvider(provider: ShareProviderData): Promise<ShareResult> {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const profileUrl = `${origin}/provider/${provider.id}`;
 
-  // 1. Custom category unit title configured by admin, if available and non-empty
-  // 2. Provider's profession or category display name, if available and non-empty
-  // 3. Neutral Arabic fallback: "مقدم خدمة" (never use "صنايعي" as universal fallback)
+  const profession = (provider.categoryUnitTitle && provider.categoryUnitTitle.trim())
+    ? provider.categoryUnitTitle.trim()
+    : (provider.categoryName && provider.categoryName.trim())
+      ? getCategoryUnit(provider.categoryName)
+      : "مقدم خدمة";
+
+  const definiteProfession = profession === "مقدم خدمة"
+    ? "مقدم الخدمة"
+    : profession.startsWith("ال")
+      ? profession
+      : `ال${profession}`;
+
+  const shareTitle = `${provider.name} — ${profession} | أهل الصنعة`;
+  const lines = [
+    `${profession} موثوق من «أهل الصنعة»`,
+    ``,
+    `👤 الاسم: ${provider.name}`,
+    provider.categoryName ? `🏷️ التخصص: ${provider.categoryName}` : null,
+    provider.areaName ? `📍 المنطقة: ${provider.areaName}` : null,
+    provider.isEmergency24h ? `⚡ متاح طوارئ ٢٤ ساعة: نعم` : null,
+    ``,
+    `🔗 تواصل مع ${definiteProfession} واطلب الخدمة عبر الرابط:`,
+    profileUrl,
+  ].filter(Boolean);
+  const shareText = lines.join("\n");
+
+  // 1. Try Web Share API if supported and available
+  if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+    try {
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        url: profileUrl,
+      });
+      return "shared";
+    } catch (err: unknown) {
+      // AbortError indicates user dismissed/cancelled the native share sheet
+      if (err instanceof Error && (err.name === "AbortError" || /abort|cancel/i.test(err.message))) {
+        return "cancelled";
+      }
+      // If Web Share failed for other reasons, fall through to clipboard
+    }
+  }
+
+  // 2. Reliable clipboard copy fallback
+  const copied = await copyToClipboard(profileUrl);
+  if (copied) {
+    return "copied";
+  }
+
+  throw new Error("clipboard_failed");
+}
+
+export async function shareProviderViaWhatsapp(provider: ShareProviderData) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const profileUrl = `${origin}/provider/${provider.id}`;
+
   const profession = (provider.categoryUnitTitle && provider.categoryUnitTitle.trim())
     ? provider.categoryUnitTitle.trim()
     : (provider.categoryName && provider.categoryName.trim())

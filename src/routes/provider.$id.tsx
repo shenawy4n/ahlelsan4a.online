@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { ArrowRight, MapPin, Clock, Wallet, Wrench, Flag, Award } from "lucide-react";
+import { ArrowRight, MapPin, Clock, Wallet, Wrench, Flag, Award, Briefcase, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { isPremiumActive, providerQuery, getCategoryUnit, getProviderProfessionTitle } from "@/lib/directory";
+import { isPremiumActive, providerQuery, getCategoryUnit, getProviderProfessionTitle, getProvider24HourMessage, sanitizeExternalUrl } from "@/lib/directory";
 import { PremiumBadge, VerifiedBadge, ProviderRatingBadge, EmergencyBadge, DeliveryBadge } from "@/components/ProviderCard";
 import { parseWorkingHours } from "@/lib/working-hours";
 import { ContactButtons } from "@/components/ContactButtons";
@@ -95,7 +95,7 @@ function ProviderPage() {
               <div className="flex items-start justify-between gap-2">
                 <h1 className="text-2xl font-extrabold">{p.name}</h1>
                 <div className="flex flex-wrap justify-end gap-1">
-                  {parseWorkingHours(p.working_hours)?.isEmergency24h ? <EmergencyBadge /> : null}
+                  {parseWorkingHours(p.working_hours)?.isEmergency24h ? <EmergencyBadge message={getProvider24HourMessage(p)} /> : null}
                   {p.has_delivery ? <DeliveryBadge /> : null}
                   {p.is_verified ? <VerifiedBadge /> : null}
                   {isPremiumActive(p) ? <PremiumBadge /> : null}
@@ -136,7 +136,21 @@ function ProviderPage() {
                 <Row icon={Award} label="سنوات الخبرة" value={p.experience_options?.label ?? null} />
                 <Row icon={Wrench} label="الخدمات" value={Array.isArray(p.services) ? (p.services as string[]).join("، ") : (p.services as unknown as string)} />
                 <Row icon={Wallet} label="الأسعار" value={p.price_description} />
-                <WorkingHoursView workingHoursRaw={p.working_hours} />
+                {p.portfolio_url && sanitizeExternalUrl(p.portfolio_url) ? (
+                  <div className="mt-3.5 mb-2">
+                    <a
+                      href={sanitizeExternalUrl(p.portfolio_url)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm font-bold text-primary transition hover:bg-primary/10 active:brightness-95"
+                    >
+                      <Briefcase className="size-4 shrink-0" />
+                      <span>شاهد الأعمال</span>
+                      <ExternalLink className="size-3.5 opacity-70 shrink-0" />
+                    </a>
+                  </div>
+                ) : null}
+                <WorkingHoursView workingHoursRaw={p.working_hours} provider={p} professionTitle={getProviderProfessionTitle(p)} />
               </div>
             </section>
             <ProviderReviews providerId={p.id} providerName={p.name} />

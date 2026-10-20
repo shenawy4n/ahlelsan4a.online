@@ -33,11 +33,12 @@ export const getAdminProvidersServerFn = createServerFn({ method: "GET" })
     const { data: unitSettings } = await supabaseAdmin
       .from("app_settings")
       .select("key, value")
-      .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%");
+      .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%,key.like.prov_portfolio_%");
     const unitsMap: Record<string, string> = {};
     const provUnitsMap: Record<string, string> = {};
     const provCatsMap: Record<string, string[]> = {};
     const provDelivMap: Record<string, boolean> = {};
+    const provPortfolioMap: Record<string, string> = {};
     for (const u of (unitSettings ?? []) as { key: string; value: string }[]) {
       if (u.key && u.value) {
         if (u.key.startsWith("cat_unit_")) {
@@ -55,6 +56,8 @@ export const getAdminProvidersServerFn = createServerFn({ method: "GET" })
           }
         } else if (u.key.startsWith("prov_deliv_")) {
           provDelivMap[u.key] = u.value === "true" || u.value === "1";
+        } else if (u.key.startsWith("prov_portfolio_")) {
+          provPortfolioMap[u.key] = u.value.trim();
         }
       }
     }
@@ -66,6 +69,7 @@ export const getAdminProvidersServerFn = createServerFn({ method: "GET" })
         (p as any).categories.unit_title = customUnit || (p as any).categories.unit_title || null;
       }
       p.profession_title = provUnitsMap[`prov_unit_${p.id}`]?.trim() || null;
+      p.portfolio_url = provPortfolioMap[`prov_portfolio_${p.id}`]?.trim() || null;
       (p as any).assigned_category_ids =
         provCatsMap[`prov_cats_${p.id}`] || ((p as any).category_id ? [(p as any).category_id] : []);
       p.has_delivery = Boolean(provDelivMap[`prov_deliv_${p.id}`]);
@@ -107,6 +111,7 @@ export const deleteProvidersAdminFn = createServerFn({ method: "POST" })
       supabaseAdmin.from("app_settings").delete().in("key", data.ids.map((id) => `prov_unit_${id}`)),
       supabaseAdmin.from("app_settings").delete().in("key", data.ids.map((id) => `prov_cats_${id}`)),
       supabaseAdmin.from("app_settings").delete().in("key", data.ids.map((id) => `prov_deliv_${id}`)),
+      supabaseAdmin.from("app_settings").delete().in("key", data.ids.map((id) => `prov_portfolio_${id}`)),
     ]);
 
     const { error } = await supabaseAdmin.from("providers").delete().in("id", data.ids);

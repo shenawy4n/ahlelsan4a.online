@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Share2 } from "lucide-react";
-import { callProvider, whatsappProvider, shareProviderViaWhatsapp, RateLimitError } from "@/lib/contact";
+import { callProvider, whatsappProvider, shareProvider, RateLimitError } from "@/lib/contact";
 
 export interface ProviderShareInfo {
   name: string;
@@ -47,7 +47,7 @@ export function ContactButtons({
     if (busy) return;
     setBusy(true);
     try {
-      await shareProviderViaWhatsapp({
+      const res = await shareProvider({
         id: providerId,
         name: providerInfo?.name || "مقدم خدمة",
         categoryName: providerInfo?.categoryName,
@@ -55,8 +55,11 @@ export function ContactButtons({
         areaName: providerInfo?.areaName,
         isEmergency24h: providerInfo?.isEmergency24h,
       });
+      if (res === "copied") {
+        toast.success("تم نسخ رابط صفحة مقدم الخدمة بنجاح");
+      }
     } catch {
-      toast.error("تعذر تجهيز رابط المشاركة");
+      toast.error("تعذر نسخ أو مشاركة الرابط");
     } finally {
       setBusy(false);
     }
@@ -95,9 +98,9 @@ export function ContactButtons({
             type="button"
             disabled={busy}
             onClick={handleShare}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-whatsapp/30 bg-whatsapp/10 px-3 py-1.5 text-xs font-extrabold text-whatsapp hover:bg-whatsapp/15 active:brightness-95 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/80 px-3 py-1.5 text-xs font-extrabold text-foreground hover:bg-secondary active:brightness-95 transition-colors"
           >
-            <Share2 className="size-3.5" /> مشاركة عبر واتساب
+            <Share2 className="size-3.5" /> مشاركة
           </button>
         </div>
       )}
