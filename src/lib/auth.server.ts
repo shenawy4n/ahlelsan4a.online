@@ -88,35 +88,24 @@ export interface AuthenticatedAdminContext {
  * Helper to resolve the user's role from DB columns, user metadata, or role settings.
  */
 async function resolveRole(user: any, adminRecord: any): Promise<AdminRole | null> {
-  if (!adminRecord || adminRecord.active !== true) {
+  // If an explicit admin_users record exists and is deactivated, reject immediately
+  if (adminRecord && adminRecord.active === false) {
     return null;
   }
 
-  if (adminRecord.is_owner === true) {
+  if (adminRecord?.is_owner === true) {
     return "owner";
   }
 
-  // Check if role column exists on admin_users table
-  if (adminRecord.role) {
+  // 1. Check if role column exists on admin_users table
+  if (adminRecord?.role) {
     const r = String(adminRecord.role).toLowerCase().trim();
     if (r === "owner") return "owner";
     if (r === "moderator") return "moderator";
     if (r === "admin") return "admin";
   }
 
-  // Check Supabase Auth user metadata
-  const userMetaRole =
-    user?.app_metadata?.role ||
-    user?.user_metadata?.role ||
-    user?.app_metadata?.app_role;
-  if (userMetaRole) {
-    const r = String(userMetaRole).toLowerCase().trim();
-    if (r === "owner") return "owner";
-    if (r === "moderator") return "moderator";
-    if (r === "admin") return "admin";
-  }
-
-  // Check app_settings for custom role mappings
+  // 2. Check app_settings for custom role mappings (supports moderator assignments even when DB enum lacks moderator)
   try {
     const { data: settingRow } = await supabaseAdmin
       .from("app_settings")
@@ -138,8 +127,24 @@ async function resolveRole(user: any, adminRecord: any): Promise<AdminRole | nul
     // Ignore setting parse error
   }
 
-  // Fallback for active admin record
-  return "admin";
+  // 3. Check Supabase Auth user metadata
+  const userMetaRole =
+    user?.app_metadata?.role ||
+    user?.user_metadata?.role ||
+    user?.app_metadata?.app_role;
+  if (userMetaRole) {
+    const r = String(userMetaRole).toLowerCase().trim();
+    if (r === "owner") return "owner";
+    if (r === "moderator") return "moderator";
+    if (r === "admin") return "admin";
+  }
+
+  // 4. Fallback for active admin record without specific role
+  if (adminRecord && adminRecord.active === true) {
+    return "admin";
+  }
+
+  return null;
 }
 
 /**

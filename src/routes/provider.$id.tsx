@@ -76,7 +76,7 @@ function ProviderPage() {
         {isLoading ? (
           <p className="text-muted-foreground">جاري التحميل...</p>
         ) : !p ? (
-          <p className="surface p-6 text-center text-lg font-bold">الصنايعي ده مش موجود.</p>
+          <p className="surface p-6 text-center text-lg font-bold">مقدم الخدمة هذا غير موجود.</p>
         ) : (
           <>
             <section className="surface p-5">
@@ -95,7 +95,7 @@ function ProviderPage() {
               <div className="flex items-start justify-between gap-2">
                 <h1 className="text-2xl font-extrabold">{p.name}</h1>
                 <div className="flex flex-wrap justify-end gap-1">
-                  {parseWorkingHours(p.working_hours)?.isEmergency24h ? <EmergencyBadge message={getProvider24HourMessage(p)} /> : null}
+                  {parseWorkingHours(p.working_hours)?.isEmergency24h ? <EmergencyBadge /> : null}
                   {p.has_delivery ? <DeliveryBadge /> : null}
                   {p.is_verified ? <VerifiedBadge /> : null}
                   {isPremiumActive(p) ? <PremiumBadge /> : null}

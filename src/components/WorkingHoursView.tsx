@@ -59,7 +59,7 @@ export function WorkingHoursView({ workingHoursRaw, professionTitle, provider }:
         {/* Real-time Status Badge */}
         {status.badgeType === "emergency" ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-3 py-1 text-xs font-black text-warning ring-1 ring-warning/30">
-            <Zap className="size-3.5 fill-current" /> {format24HourMessage(cleanTitle)}
+            <Zap className="size-3.5 fill-current" /> طوارئ 24
           </span>
         ) : status.isOpen === true ? (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-3 py-1 text-xs font-black text-success ring-1 ring-success/30">

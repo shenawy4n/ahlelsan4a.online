@@ -2,7 +2,7 @@ import { ChangePassword } from "./ChangePassword";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState, useRef } from "react";
 import { toast } from "sonner";
-import { Phone, PhoneCall, MessageCircle, Eye, Search, Upload, Image as ImageIcon, Trash2, Loader2, FileText, Info, Shield, Share2, Globe, Check, X as XIcon, Lightbulb, Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Phone, PhoneCall, MessageCircle, Eye, Search, Upload, Image as ImageIcon, Trash2, Loader2, FileText, Info, Shield, Share2, Globe, Check, X as XIcon, Lightbulb, Clock, CheckCircle2, XCircle, RotateCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { settingsQuery } from "@/lib/directory";
 import { ExperienceManager } from "./Lists";
@@ -29,7 +29,11 @@ function useEvents(range: Range) {
       const start = rangeStart(range);
       const out: Ev[] = [];
       for (let from = 0; from < 100000; from += 1000) {
-        let q = supabase.from("analytics_events").select("event_type,provider_id,category_id").range(from, from + 999);
+        let q = supabase
+          .from("analytics_events")
+          .select("event_type,provider_id,category_id")
+          .order("created_at", { ascending: false })
+          .range(from, from + 999);
         if (start) q = q.gte("created_at", start);
         const { data, error } = await q;
         if (error) throw error;
@@ -220,7 +224,17 @@ export function Analytics() {
   }, [e, provList]);
 
   const cnt = (t: string) => e.filter((x) => x.event_type === t).length;
-  const catRows = catList.map((c) => ({ c, n: provList.filter((p) => p.category_id === c.id).length, s: byCat.get(c.id) ?? blank() })).sort((a, b) => b.s[sort] - a.s[sort]);
+  const catRows = catList
+    .map((c) => ({
+      c,
+      n: provList.filter((p) =>
+        Array.isArray((p as any).assigned_category_ids) && (p as any).assigned_category_ids.length > 0
+          ? (p as any).assigned_category_ids.includes(c.id)
+          : p.category_id === c.id
+      ).length,
+      s: byCat.get(c.id) ?? blank(),
+    }))
+    .sort((a, b) => b.s[sort] - a.s[sort]);
   const provRows = provList.map((p) => ({ p, s: byProv.get(p.id) ?? blank() }));
   const topBy = (k: Sort) => [...provRows].filter((r) => r.s[k] > 0).sort((a, b) => b.s[k] - a.s[k]).slice(0, 10);
   const provSorted = [...provRows].sort((a, b) => b.s[sort] - a.s[sort]).slice(0, 50);
@@ -261,7 +275,18 @@ export function Analytics() {
 
   return (
     <div className="grid gap-5">
-      <RangePicker value={range} onChange={setRange} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <RangePicker value={range} onChange={setRange} />
+        <button
+          type="button"
+          onClick={() => ev.refetch()}
+          disabled={ev.isFetching}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary transition-colors disabled:opacity-60"
+        >
+          <RotateCw className={`size-3.5 ${ev.isFetching ? "animate-spin" : ""}`} />
+          <span>تحديث</span>
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard label="مشاهدات الملفات" value={cnt("profile_view")} />
         <StatCard label="ضغطات الاتصال" value={cnt("phone_click")} />

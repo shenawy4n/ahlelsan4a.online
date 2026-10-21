@@ -676,5 +676,100 @@ export const saveCategoryProviderOrderAdminFn = createServerFn({ method: "POST" 
     return { ok: true as const };
   });
 
+/** Get reports list (Admin & Moderator) */
+export const getReportsAdminFn = createServerFn({ method: "GET" })
+  .middleware([requireModeratorAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin
+      .from("reports")
+      .select("*, providers(name,status)")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[getReportsAdminFn error]", error);
+      throw new Response(
+        JSON.stringify({ ok: false, message: error.message || "Failed to load reports" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return (data ?? []) as any[];
+  });
+
+/** Update report status (Admin & Moderator) */
+export const updateReportStatusAdminFn = createServerFn({ method: "POST" })
+  .middleware([requireModeratorAuth])
+  .validator((d: { id: string; status: "new" | "reviewing" | "resolved" | "rejected" }) => d)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("reports")
+      .update({ status: data.status })
+      .eq("id", data.id);
+
+    if (error) {
+      throw new Response(
+        JSON.stringify({ ok: false, message: error.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return { ok: true as const };
+  });
+
+/** Hide provider from report action (Admin & Moderator) */
+export const hideProviderFromReportAdminFn = createServerFn({ method: "POST" })
+  .middleware([requireModeratorAuth])
+  .validator((d: { providerId: string }) => d)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+    const { error } = await supabaseAdmin
+      .from("providers")
+      .update({ status: "hidden", updated_at: new Date().toISOString() })
+      .eq("id", data.providerId);
+
+    if (error) {
+      throw new Response(
+        JSON.stringify({ ok: false, message: error.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    return { ok: true as const };
+  });
+
+/** Get request live counts for applications, reports, suggestions, and messages (Admin & Moderator) */
+export const getRequestCountsAdminFn = createServerFn({ method: "GET" })
+  .middleware([requireModeratorAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+    const [appsRes, reportsRes, suggsRes, msgsRes] = await Promise.all([
+      supabaseAdmin
+        .from("provider_applications")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending"),
+      supabaseAdmin
+        .from("reports")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["new", "reviewing"]),
+      supabaseAdmin
+        .from("service_suggestions")
+        .select("id", { count: "exact", head: true })
+        .not("name", "ilike", "[رسالة تواصل]%")
+        .eq("status", "new"),
+      supabaseAdmin
+        .from("service_suggestions")
+        .select("id", { count: "exact", head: true })
+        .ilike("name", "[رسالة تواصل]%")
+        .eq("status", "new"),
+    ]);
+
+    return {
+      applications: appsRes.count ?? 0,
+      reports: reportsRes.count ?? 0,
+      suggestions: suggsRes.count ?? 0,
+      messages: msgsRes.count ?? 0,
+    };
+  });
+
+
 
 

@@ -120,12 +120,34 @@ export function useAll() {
 
 export type Range = "today" | "7" | "30" | "all";
 export const RANGES: [Range, string][] = [["today", "اليوم"], ["7", "آخر 7 أيام"], ["30", "آخر 30 يوم"], ["all", "كل الوقت"]];
+
+export function getCairoStartOfDaysAgo(daysAgo: number): string {
+  const now = new Date();
+  const cairoFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Cairo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const [year, month, day] = cairoFormatter.format(now).split("-").map(Number);
+  const base = new Date(Date.UTC(year, month - 1, day - daysAgo, 12, 0, 0));
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Africa/Cairo",
+    timeZoneName: "longOffset",
+    hour: "numeric",
+  }).formatToParts(base);
+  const tzOffsetStr = parts.find((p) => p.type === "timeZoneName")?.value || "GMT+2";
+  const match = tzOffsetStr.match(/GMT([+-]\d{1,2})(?::?(\d{2}))?/);
+  const offsetHours = match ? parseInt(match[1], 10) : 2;
+  const offsetMins = match && match[2] ? parseInt(match[2], 10) : 0;
+  const totalOffsetMinutes = offsetHours * 60 + (offsetHours >= 0 ? offsetMins : -offsetMins);
+  const cairoMidnightUtc = new Date(Date.UTC(year, month - 1, day - daysAgo, 0, 0, 0) - totalOffsetMinutes * 60000);
+  return cairoMidnightUtc.toISOString();
+}
+
 export function rangeStart(r: Range): string | null {
   if (r === "all") return null;
-  const d = new Date();
-  if (r === "today") d.setHours(0, 0, 0, 0);
-  else d.setDate(d.getDate() - Number(r));
-  return d.toISOString();
+  return getCairoStartOfDaysAgo(r === "today" ? 0 : Number(r));
 }
 
 export function RangePicker({ value, onChange }: { value: Range; onChange: (r: Range) => void }) {

@@ -82,14 +82,14 @@ export function VerifiedBadge() {
 }
 
 export function EmergencyBadge({ message }: { message?: string } = {}) {
-  const label = message || "متاح 24 ساعة";
+  const label = message || "طوارئ 24";
   return (
     <span
       title={label}
       aria-label={label}
       className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-black text-warning ring-1 ring-warning/30"
     >
-      <Zap className="size-3.5 fill-current" /> طوارئ 24H
+      <Zap className="size-3.5 fill-current" /> طوارئ 24
     </span>
   );
 }
@@ -116,9 +116,6 @@ export function ProviderCard({
   const premium = isPremiumActive(provider);
   const hoursData = parseWorkingHours(provider.working_hours);
   const openStatus = hoursData ? getOpenStatus(hoursData) : null;
-  const emergencyMessage = hoursData?.isEmergency24h
-    ? getProvider24HourMessage(provider)
-    : undefined;
 
   const count = typeof ratingSummary?.count === "number"
     ? ratingSummary.count
@@ -144,7 +141,7 @@ export function ProviderCard({
         <div className="flex items-start justify-between gap-2">
           <h3 className="text-lg font-extrabold text-foreground">{provider.name}</h3>
           <div className="flex flex-wrap justify-end gap-1">
-            {hoursData?.isEmergency24h ? <EmergencyBadge message={emergencyMessage} /> : null}
+            {hoursData?.isEmergency24h ? <EmergencyBadge /> : null}
             {provider.has_delivery ? <DeliveryBadge /> : null}
             {provider.is_verified ? <VerifiedBadge /> : null}
             {premium ? <PremiumBadge /> : null}
@@ -159,16 +156,7 @@ export function ProviderCard({
             <MapPin className="inline size-3.5 align-[-2px]" /> {provider.areas?.name}
           </p>
           <div className="flex items-center gap-1.5">
-            {hoursData?.isEmergency24h ? (
-              <span
-                suppressHydrationWarning
-                title={emergencyMessage}
-                className="inline-flex items-center gap-1 text-[11px] font-bold text-warning"
-              >
-                <span className="size-1.5 rounded-full bg-warning" />
-                {emergencyMessage}
-              </span>
-            ) : openStatus && openStatus.isOpen !== null ? (
+            {!hoursData?.isEmergency24h && openStatus && openStatus.isOpen !== null ? (
               <span
                 suppressHydrationWarning
                 className={`inline-flex items-center gap-1 text-[11px] font-bold ${
@@ -233,7 +221,7 @@ export function ProviderCard({
           providerInfo={{
             name: provider.name,
             categoryName: provider.categories?.name,
-            categoryUnitTitle: (provider.categories as any)?.unit_title || (provider as any).category_unit_title,
+            categoryUnitTitle: getProviderProfessionTitle(provider),
             areaName: provider.areas?.name,
             isEmergency24h: hoursData?.isEmergency24h,
           }}

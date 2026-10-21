@@ -135,7 +135,7 @@ function Home() {
         {/* Hero Section */}
         <section className="pt-6">
           <h1 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-            محتاج خدمة في قريتك؟
+            دليلك الموثق
           </h1>
           <p className="mt-1 text-[15px] text-muted-foreground">
             كل أرقام الصنايعية والخدمات في مكان واحد. اتصل أو كلّمه واتساب مباشرة.

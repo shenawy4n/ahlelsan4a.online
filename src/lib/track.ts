@@ -64,7 +64,10 @@ async function flushEvents() {
   if (admin) return;
 
   try {
-    await supabase.from("analytics_events").insert(toSend);
+    const { error } = await supabase.from("analytics_events").insert(toSend);
+    if (error) {
+      console.warn("[track] Analytics event write failed:", error.message);
+    }
   } catch {
     // Non-blocking fail silently
   }

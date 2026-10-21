@@ -145,7 +145,7 @@ export function WorkingHoursEditor({ value, onChange }: WorkingHoursEditorProps)
             <Zap className="size-4 text-warning" /> متاح طوارئ ٢٤ ساعة (Emergency 24/7)
           </span>
           <span className="text-xs text-muted-foreground">
-            تفعيل هذه الخاصية يُظهر شارة طوارئ مميزة في ملف الصنايعي وتعتبر مواعيده مفتوحة دائماً.
+            تفعيل هذه الخاصية يُظهر شارة طوارئ مميزة في ملف مقدم الخدمة وتعتبر مواعيده مفتوحة دائماً.
           </span>
         </div>
       </label>

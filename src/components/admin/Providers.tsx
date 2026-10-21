@@ -1,7 +1,7 @@
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Star, BadgeCheck, AlertTriangle, ExternalLink, ArrowRight, Truck } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Star, BadgeCheck, AlertTriangle, ExternalLink, ArrowRight, Truck, Briefcase } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isPremiumActive, settingsQuery, getCategoryUnit, getProviderProfessionTitle, sanitizeExternalUrl, type Area, type Category, type ExperienceOption, type ProviderWithRefs, normalizeEgPhone } from "@/lib/directory";
 import { input, btnGhost, useAll, isFlagged } from "./shared";
@@ -104,7 +104,7 @@ export function Providers({
 
   async function patch(ids: string[], row: Patch) {
     if (!ids.length) return;
-    const { error } = await supabase.from("providers").update(row).in("id", ids);
+    const { error } = await supabase.from("providers").update({ ...row, updated_at: new Date().toISOString() }).in("id", ids);
     if (error) { toast.error(error.message); return; }
     toast.success("تم");
     refresh();
@@ -220,6 +220,7 @@ export function Providers({
             <p className="font-extrabold">
               {p.name}{" "}
               {p.has_delivery ? <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:text-emerald-400 mr-1.5"><Truck className="inline size-3.5" /> توصيل</span> : null}{" "}
+              {p.portfolio_url ? <span className="inline-flex items-center gap-0.5 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-bold text-primary mr-1.5"><Briefcase className="inline size-3" /> أعمال</span> : null}{" "}
               {p.is_verified ? <BadgeCheck className="inline size-4 text-primary" /> : null}{" "}
               {isPremiumActive(p) ? <Star className="inline size-4 fill-premium text-premium" /> : null}{" "}
               {p.status !== "active" ? <span className="text-xs text-destructive">(مخفي)</span> : null}{" "}
@@ -231,6 +232,9 @@ export function Providers({
                 ? ` · (${(p as any).assigned_category_ids.length} أقسام)`
                 : ""}
               {p.experience_options ? ` · ${p.experience_options.label}` : ""}
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              آخر تعديل: {p.updated_at ? new Date(p.updated_at).toLocaleString("ar-EG", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Africa/Cairo" }) : "غير متوفر"}
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap justify-end gap-0.5">
@@ -452,6 +456,7 @@ function ProviderForm({
           is_verified: f.is_verified,
           experience_id: f.experience_id || null,
           premium_expires_at: f.is_premium && f.premium_expires_at ? new Date(f.premium_expires_at + "T23:59:59").toISOString() : null,
+          updated_at: new Date().toISOString(),
         };
 
         const { error: updateError } = await supabase.from("providers").update(row).eq("id", f.id);
