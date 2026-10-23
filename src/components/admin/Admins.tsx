@@ -22,6 +22,7 @@ import {
   setAdminActiveStatus,
   revokeAdminAccount,
   setAdminPassword,
+  getAdminsList,
 } from "@/lib/admins.functions";
 import { input } from "./shared";
 import { ConfirmModal, type ConfirmState } from "./ConfirmModal";
@@ -34,6 +35,7 @@ type AdminRow = {
   active: boolean;
   added_by_email: string | null;
   created_at: string;
+  role?: "owner" | "admin" | "moderator";
 };
 
 const ERR_MAP: Record<string, string> = {
@@ -51,6 +53,7 @@ const getErrorMsg = (code: string) =>
 
 export function Admins() {
   const qc = useQueryClient();
+  const getAdminsFn = useServerFn(getAdminsList);
   const addFn = useServerFn(addAdmin);
   const transferFn = useServerFn(transferOwnership);
   const setActiveFn = useServerFn(setAdminActiveStatus);
@@ -71,13 +74,8 @@ export function Admins() {
   const list = useQuery({
     queryKey: ["admin", "admins"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("admin_users" as never)
-        .select("*")
-        .order("is_owner", { ascending: false })
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as unknown as AdminRow[];
+      const data = await getAdminsFn();
+      return (data ?? []) as AdminRow[];
     },
   });
 
@@ -115,7 +113,9 @@ export function Admins() {
         toast.error(getErrorMsg((r as any)?.code));
         return;
       }
-      toast.success("تمت إضافة المسؤول بنجاح");
+      toast.success(
+        role === "moderator" ? "تمت إضافة مشرف المحتوى بنجاح" : "تمت إضافة المسؤول بنجاح"
+      );
       if (r.warning) {
         toast.warning(r.warning);
       }
@@ -335,6 +335,10 @@ export function Admins() {
                     {admin.is_owner ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 border border-primary/20 px-2.5 py-0.5 text-[11px] font-black text-primary">
                         <Crown className="size-3 text-premium" /> المالك الرئيسي (Owner)
+                      </span>
+                    ) : admin.role === "moderator" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                        <ShieldCheck className="size-3 text-emerald-600 dark:text-emerald-400" /> مشرف محتوى (Content Moderator)
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 rounded-full bg-secondary border border-border px-2.5 py-0.5 text-[11px] font-bold text-foreground">

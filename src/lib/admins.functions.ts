@@ -88,7 +88,7 @@ export const addAdmin = createServerFn({ method: "POST" })
           map = JSON.parse(s.value);
         } catch {}
       }
-      map[data.email] = data.role;
+      map[data.email.toLowerCase().trim()] = data.role;
       await supabaseAdmin.from("app_settings").upsert({
         key: "admin_roles_map",
         value: JSON.stringify(map),
@@ -378,6 +378,28 @@ export const revokeAdminAccount = createServerFn({ method: "POST" })
       );
     }
 
+    // Clean up role mapping in app_settings if present
+    try {
+      const { data: s } = await supabaseAdmin
+        .from("app_settings")
+        .select("value")
+        .eq("key", "admin_roles_map")
+        .maybeSingle();
+      if (s?.value) {
+        const map = JSON.parse(s.value);
+        const email = target.email.toLowerCase().trim();
+        if (map[email]) {
+          delete map[email];
+          await supabaseAdmin.from("app_settings").upsert({
+            key: "admin_roles_map",
+            value: JSON.stringify(map),
+          });
+        }
+      }
+    } catch {
+      // Non-fatal
+    }
+
     await supabaseAdmin.from("audit_log").insert({
       admin_id: caller.userId,
       admin_email: caller.userEmail,
@@ -472,4 +494,63 @@ export const getCurrentAdminRole = createServerFn({ method: "GET" })
       isOwner: Boolean(caller.isOwner),
       isModerator: Boolean(caller.isModerator),
     };
+  });
+
+/** Authenticated admin/moderator: returns list of admins with their resolved roles. */
+export const getAdminsList = createServerFn({ method: "GET" })
+  .middleware([requireModeratorAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+    const { data: admins, error } = await supabaseAdmin
+      .from("admin_users")
+      .select("*")
+      .order("is_owner", { ascending: false })
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      throw new Response(
+        JSON.stringify({ ok: false, message: "فشل تحميل قائمة المسؤولين" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Fetch role mappings from app_settings
+    let roleMap: Record<string, string> = {};
+    try {
+      const { data: s } = await supabaseAdmin
+        .from("app_settings")
+        .select("value")
+        .eq("key", "admin_roles_map")
+        .maybeSingle();
+      if (s?.value) {
+        roleMap = JSON.parse(s.value);
+      }
+    } catch {}
+
+    return (admins || []).map((a: any) => {
+      const email = (a.email || "").toLowerCase().trim();
+      let role: "owner" | "admin" | "moderator" = a.is_owner ? "owner" : "admin";
+      if (!a.is_owner) {
+        if (roleMap[email]) {
+          const r = String(roleMap[email]).toLowerCase().trim();
+          if (r === "moderator" || r === "admin") {
+            role = r as "admin" | "moderator";
+          }
+        } else if (a.role) {
+          const r = String(a.role).toLowerCase().trim();
+          if (r === "moderator" || r === "admin") {
+            role = r as "admin" | "moderator";
+          }
+        }
+      }
+      return {
+        id: a.id as string,
+        email: a.email as string,
+        is_owner: Boolean(a.is_owner),
+        active: Boolean(a.active),
+        added_by_email: (a.added_by_email as string | null) || null,
+        created_at: a.created_at as string,
+        role,
+      };
+    });
   });

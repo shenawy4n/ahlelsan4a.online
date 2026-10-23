@@ -103,9 +103,12 @@ async function resolveRole(user: any, adminRecord: any): Promise<AdminRole | nul
     if (r === "owner") return "owner";
     if (r === "moderator") return "moderator";
     if (r === "admin") return "admin";
+    // If an invalid/unknown role string was explicitly set, reject safely
+    return null;
   }
 
-  // 2. Check app_settings for custom role mappings (supports moderator assignments even when DB enum lacks moderator)
+  // 2. Check app_settings for custom role mappings (server-authoritative role store)
+  let settingRole: AdminRole | null = null;
   try {
     const { data: settingRow } = await supabaseAdmin
       .from("app_settings")
@@ -115,12 +118,13 @@ async function resolveRole(user: any, adminRecord: any): Promise<AdminRole | nul
 
     if (settingRow?.value) {
       const map = JSON.parse(settingRow.value);
-      const email = (user.email || "").toLowerCase().trim();
-      if (map[email]) {
+      const email = (user?.email || adminRecord?.email || "").toLowerCase().trim();
+      if (email && map[email]) {
         const r = String(map[email]).toLowerCase().trim();
-        if (r === "owner") return "owner";
-        if (r === "moderator") return "moderator";
-        if (r === "admin") return "admin";
+        if (r === "owner") settingRole = "owner";
+        else if (r === "moderator") settingRole = "moderator";
+        else if (r === "admin") settingRole = "admin";
+        else return null; // Reject unknown mapped roles
       }
     }
   } catch {
@@ -128,18 +132,33 @@ async function resolveRole(user: any, adminRecord: any): Promise<AdminRole | nul
   }
 
   // 3. Check Supabase Auth user metadata
+  let metaRole: AdminRole | null = null;
   const userMetaRole =
     user?.app_metadata?.role ||
     user?.user_metadata?.role ||
     user?.app_metadata?.app_role;
   if (userMetaRole) {
     const r = String(userMetaRole).toLowerCase().trim();
-    if (r === "owner") return "owner";
-    if (r === "moderator") return "moderator";
-    if (r === "admin") return "admin";
+    if (r === "owner") metaRole = "owner";
+    else if (r === "moderator") metaRole = "moderator";
+    else if (r === "admin") metaRole = "admin";
+    else return null; // Reject unknown metadata roles
   }
 
-  // 4. Fallback for active admin record without specific role
+  // When admin_roles_map and Auth metadata disagree:
+  // Server-side admin_roles_map is authoritative, and privileges must never be silently broadened.
+  if (settingRole && metaRole) {
+    if (settingRole === metaRole) return settingRole;
+    // Least-privilege principle: never elevate a moderator to admin upon disagreement
+    if (settingRole === "moderator" || metaRole === "moderator") return "moderator";
+    return settingRole;
+  }
+
+  if (settingRole) return settingRole;
+  if (metaRole) return metaRole;
+
+  // 4. Fallback for pre-existing admin_users records where role separation was not configured
+  // Note: ONLY applies to confirmed active records in admin_users table (never normal users)
   if (adminRecord && adminRecord.active === true) {
     return "admin";
   }

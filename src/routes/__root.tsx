@@ -56,12 +56,12 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
           >
             حاول تاني
           </button>
-          <a
-            href="/"
+          <Link
+            to="/"
             className="rounded-xl border border-border bg-card px-5 py-3 font-bold text-foreground"
           >
             الرئيسية
-          </a>
+          </Link>
         </div>
       </div>
     </div>
@@ -73,7 +73,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "أهل الصنعة — دليل خدمات القرية" },
       {
         name: "description",
         content:

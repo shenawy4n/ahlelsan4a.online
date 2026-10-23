@@ -351,7 +351,7 @@ function Home() {
             </div>
 
             <Link to="/search" className="text-xs sm:text-[14px] font-bold text-primary hover:underline shrink-0 mr-auto sm:mr-0">
-              عرض كل الصنايعية ←
+              عرض كل الخدمات ←
             </Link>
           </div>
 
