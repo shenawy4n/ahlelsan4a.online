@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
-import { Users2, FolderTree, MapPin } from "lucide-react";
+import { Users2, FolderTree, MapPin, ListOrdered } from "lucide-react";
 import { Providers } from "./Providers";
 import { Categories, Areas } from "./Lists";
+import { ServiceShortcutsOrder } from "./ServiceShortcutsOrder";
 
-export type ServicesSubTab = "workers" | "categories" | "areas";
+export type ServicesSubTab = "workers" | "categories" | "areas" | "shortcuts";
 
 export function ServicesHub({
   initialSubTab = "workers",
@@ -50,6 +51,12 @@ export function ServicesHub({
       icon: MapPin,
       description: "إدارة القرى والمراكز المغطاة في الدليل",
     },
+    {
+      id: "shortcuts" as const,
+      label: "ترتيب اختصارات الخدمات",
+      icon: ListOrdered,
+      description: "التحكم في ترتيب شارات الفلترة السريعة بالصفحة الرئيسية",
+    },
   ];
 
   return (
@@ -60,7 +67,7 @@ export function ServicesHub({
           <div>
             <h2 className="text-xl font-extrabold text-foreground">الخدمات</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              إدارة العمال وأصحاب المهن، أقسام الخدمات، والقرى والمناطق
+              إدارة العمال وأصحاب المهن، أقسام الخدمات، والقرى والمناطق، وترتيب اختصارات الخدمات
             </p>
           </div>
         </div>
@@ -112,6 +119,7 @@ export function ServicesHub({
           />
         )}
         {subTab === "areas" && <Areas isModerator={isModerator} />}
+        {subTab === "shortcuts" && <ServiceShortcutsOrder />}
       </div>
     </div>
   );
