@@ -18,23 +18,24 @@ export function AvailabilityFilter({
   counts,
 }: AvailabilityFilterProps) {
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="تصفية حسب التوافر">
       <button
         type="button"
         onClick={() => onModeChange("all")}
-        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-all ${
+        aria-pressed={currentMode === "all"}
+        className={`min-h-[44px] inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-black transition-all active:scale-[0.98] ${
           currentMode === "all"
-            ? "bg-primary text-primary-foreground shadow-sm"
-            : "bg-secondary/80 text-muted-foreground hover:bg-secondary hover:text-foreground ring-1 ring-border"
+            ? "bg-primary text-primary-foreground shadow-xs ring-1 ring-primary/40"
+            : "surface text-muted-foreground hover:text-foreground hover:border-primary/40 border border-border"
         }`}
       >
         <span>الكل</span>
         {counts !== undefined && (
           <span
-            className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+            className={`rounded-full px-2 py-0.5 text-[11px] font-black ${
               currentMode === "all"
                 ? "bg-primary-foreground/20 text-primary-foreground"
-                : "bg-muted text-muted-foreground"
+                : "bg-secondary text-muted-foreground"
             }`}
           >
             {counts.all}
@@ -45,20 +46,21 @@ export function AvailabilityFilter({
       <button
         type="button"
         onClick={() => onModeChange("available_now")}
-        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-all ${
+        aria-pressed={currentMode === "available_now"}
+        className={`min-h-[44px] inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-black transition-all active:scale-[0.98] ${
           currentMode === "available_now"
-            ? "bg-success text-success-foreground shadow-sm ring-2 ring-success/40"
-            : "bg-secondary/80 text-muted-foreground hover:bg-secondary hover:text-foreground ring-1 ring-border"
+            ? "bg-success text-success-foreground shadow-xs ring-2 ring-success/30"
+            : "surface text-muted-foreground hover:text-foreground hover:border-success/40 border border-border"
         }`}
       >
-        <span className="size-2 rounded-full bg-success" />
+        <span className={`size-2 rounded-full ${currentMode === "available_now" ? "bg-success-foreground animate-pulse" : "bg-success"}`} aria-hidden="true" />
         <span>متاح الآن</span>
         {counts !== undefined && (
           <span
-            className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+            className={`rounded-full px-2 py-0.5 text-[11px] font-black ${
               currentMode === "available_now"
                 ? "bg-success-foreground/20 text-success-foreground"
-                : "bg-muted text-muted-foreground"
+                : "bg-secondary text-muted-foreground"
             }`}
           >
             {counts.availableNow}
@@ -69,20 +71,21 @@ export function AvailabilityFilter({
       <button
         type="button"
         onClick={() => onModeChange("emergency_now")}
-        className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-extrabold transition-all ${
+        aria-pressed={currentMode === "emergency_now"}
+        className={`min-h-[44px] inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs sm:text-sm font-black transition-all active:scale-[0.98] ${
           currentMode === "emergency_now"
-            ? "bg-warning text-warning-foreground shadow-sm ring-2 ring-warning/40"
-            : "bg-secondary/80 text-muted-foreground hover:bg-secondary hover:text-foreground ring-1 ring-border"
+            ? "bg-warning text-warning-foreground shadow-xs ring-2 ring-warning/30"
+            : "surface text-muted-foreground hover:text-foreground hover:border-warning/40 border border-border"
         }`}
       >
-        <Zap className="size-3.5 fill-current" />
+        <Zap className="size-3.5 fill-current" aria-hidden="true" />
         <span>طوارئ ٢٤ ساعة</span>
         {counts !== undefined && (
           <span
-            className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+            className={`rounded-full px-2 py-0.5 text-[11px] font-black ${
               currentMode === "emergency_now"
                 ? "bg-warning-foreground/20 text-warning-foreground"
-                : "bg-muted text-muted-foreground"
+                : "bg-secondary text-muted-foreground"
             }`}
           >
             {counts.emergencyNow}

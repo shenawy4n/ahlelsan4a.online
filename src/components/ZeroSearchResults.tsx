@@ -109,16 +109,16 @@ export function ZeroSearchResults({
   }
 
   return (
-    <div className="surface grid gap-6 p-6 text-center">
+    <div className="surface grid gap-6 p-6 sm:p-8 text-center rounded-2xl shadow-xs">
       {/* Icon and Main Title */}
       <div className="mx-auto flex flex-col items-center">
-        <div className="grid size-14 place-items-center rounded-2xl bg-muted/60 text-muted-foreground ring-1 ring-border">
-          <SearchX className="size-7" />
+        <div className="grid size-16 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20 shadow-xs">
+          <SearchX className="size-8" aria-hidden="true" />
         </div>
-        <h3 className="mt-4 text-lg font-extrabold text-foreground">
+        <h3 className="mt-4 font-display text-xl sm:text-2xl font-black text-foreground">
           لا يوجد صنايعية مطابقون لبحثك
         </h3>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1.5 text-sm sm:text-base text-muted-foreground font-medium max-w-md">
           {query.trim()
             ? `لم نعثر على صنايعية مسجلين باسم أو خدمة «${query.trim()}»`
             : "لم نتمكن من العثور على أي نتائج وفق الفلاتر المحددة"}
@@ -127,17 +127,17 @@ export function ZeroSearchResults({
 
       {/* Action 1: If Availability or Emergency filter is active */}
       {filterMode !== "all" && onClearFilter && (
-        <div className="rounded-xl border border-warning/25 bg-warning/10 p-3 text-xs text-foreground text-start">
-          <p className="font-bold">
+        <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-xs sm:text-sm text-foreground text-start">
+          <p className="font-black text-warning-foreground">
             💡 ملاحظة: فلتر ({filterMode === "available_now" ? "متاح الآن" : "طوارئ ٢٤ ساعة"}) مفعل.
           </p>
-          <p className="mt-0.5 opacity-90">
+          <p className="mt-1 opacity-90 font-medium">
             قد يكون هناك صنايعية مسجلون في هذه الخدمة ولكن مواعيد عملهم مغلقة حالياً.
           </p>
           <button
             type="button"
             onClick={onClearFilter}
-            className="mt-2 inline-flex items-center gap-1 font-black text-primary underline"
+            className="mt-2.5 inline-flex min-h-[40px] items-center gap-1 font-black text-primary underline hover:text-primary/80 transition-colors"
           >
             إلغاء فلتر التواجد وعرض كل الصنايعية
           </button>
@@ -153,15 +153,15 @@ export function ZeroSearchResults({
         <div className="grid gap-2.5">
           {/* Option A: Change Area */}
           {areaId && onClearArea && (
-            <div className="flex items-center justify-between rounded-xl border border-border bg-card/60 p-3 text-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-2xl border border-border/80 bg-card/80 p-3.5 text-xs sm:text-sm shadow-2xs">
               <div className="flex items-center gap-2">
-                <MapPin className="size-4 text-primary shrink-0" />
-                <span className="font-bold text-foreground">جرّب منطقة أخرى أو ابحث في كل القرى:</span>
+                <MapPin className="size-4 text-primary shrink-0" aria-hidden="true" />
+                <span className="font-extrabold text-foreground">جرّب منطقة أخرى أو ابحث في كل القرى:</span>
               </div>
               <button
                 type="button"
                 onClick={onClearArea}
-                className="font-extrabold text-primary underline hover:text-primary/80"
+                className="min-h-[40px] inline-flex items-center font-black text-primary underline hover:text-primary/80 transition-colors shrink-0"
               >
                 البحث في كل المناطق
               </button>
@@ -170,12 +170,12 @@ export function ZeroSearchResults({
 
           {/* Option B: Try Another Category */}
           {categories.length > 0 && (
-            <div className="rounded-xl border border-border bg-card/60 p-3 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-foreground mb-2">
-                <Tag className="size-4 text-primary shrink-0" />
+            <div className="rounded-2xl border border-border/80 bg-card/80 p-3.5 text-xs sm:text-sm shadow-2xs">
+              <div className="flex items-center gap-1.5 font-extrabold text-foreground mb-2.5">
+                <Tag className="size-4 text-primary shrink-0" aria-hidden="true" />
                 <span>جرّب تصنيفاً آخر من الخدمات الأكثر طلباً:</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2">
                 {categories.slice(0, 6).map((cat) => (
                   <Link
                     key={cat.id}

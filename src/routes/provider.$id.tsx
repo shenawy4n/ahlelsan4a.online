@@ -70,34 +70,48 @@ function ProviderPage() {
     <div className="min-h-screen bg-background pb-12">
       <SiteHeader />
       <main className="mx-auto w-full max-w-3xl px-4 pt-5">
-        <Link to="/" className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-primary">
-          <ArrowRight className="size-4" /> الرئيسية
+        <Link
+          to="/"
+          className="mb-4 inline-flex min-h-[44px] items-center gap-1.5 text-xs sm:text-sm font-extrabold text-primary hover:underline"
+        >
+          <ArrowRight className="size-4" aria-hidden="true" />
+          <span>الرجوع للرئيسية</span>
         </Link>
         {isLoading ? (
-          <p className="text-muted-foreground">جاري التحميل...</p>
+          <div className="surface p-8 rounded-2xl animate-pulse space-y-4">
+            <div className="h-7 w-48 bg-muted rounded-md" />
+            <div className="h-5 w-32 bg-muted/70 rounded-md" />
+            <div className="h-14 bg-muted/80 rounded-xl" />
+          </div>
         ) : !p ? (
-          <p className="surface p-6 text-center text-lg font-bold">مقدم الخدمة هذا غير موجود.</p>
+          <p className="surface p-6 text-center text-lg font-bold rounded-2xl">مقدم الخدمة هذا غير موجود.</p>
         ) : (
           <>
-            <section className="surface p-5">
+            <section className="surface p-5 sm:p-6 rounded-2xl">
               {p.photo_url ? (
                 <img
                   src={p.photo_url}
                   alt={p.name}
                   loading="lazy"
                   decoding="async"
-                  className="mb-4 aspect-video w-full rounded-xl object-cover"
+                  className="mb-4 aspect-video w-full rounded-xl object-cover border border-border/60 shadow-xs"
                   onError={(e) => {
                     e.currentTarget.style.display = "none";
                   }}
                 />
               ) : null}
-              <div className="flex items-start justify-between gap-2">
-                <h1 className="text-2xl font-extrabold">{p.name}</h1>
-                <div className="flex flex-wrap justify-end gap-1">
+              <div className="flex items-start justify-between gap-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <h1 className="font-display text-2xl sm:text-3xl font-black text-foreground truncate">
+                    {p.name}
+                  </h1>
+                  {p.is_verified ? (
+                    <VerifiedBadge />
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
                   {parseWorkingHours(p.working_hours)?.isEmergency24h ? <EmergencyBadge /> : null}
                   {p.has_delivery ? <DeliveryBadge /> : null}
-                  {p.is_verified ? <VerifiedBadge /> : null}
                   {isPremiumActive(p) ? <PremiumBadge /> : null}
                 </div>
               </div>

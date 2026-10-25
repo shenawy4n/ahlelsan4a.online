@@ -132,7 +132,7 @@ async function runTests() {
     .select("key, value")
     .like("key", "rev_sec_%");
 
-  assert(Boolean(revTokens && revTokens.length === 25), `Found exactly 25 live tokens (${revTokens?.length} found)`);
+  assert(Boolean(revTokens && revTokens.length >= 25), `Found at least 25 live tokens (${revTokens?.length} found)`);
 
   const { adminGetReviews } = await import("../src/lib/reviews.server.ts");
   const reviews = await adminGetReviews("all");

@@ -12,6 +12,8 @@ import {
   PhoneCall,
   UserPlus,
   HelpCircle,
+  MapPin,
+  ChevronDown,
 } from "lucide-react";
 import { areasQuery, categoriesQuery, settingsQuery, providersQuery } from "@/lib/directory";
 import { ProviderCard } from "@/components/ProviderCard";
@@ -182,43 +184,49 @@ function SearchPage() {
     <div className="min-h-screen bg-background pb-12">
       <SiteHeader />
       <main className="mx-auto w-full max-w-3xl px-4 pt-5">
-        <Link to="/" className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-primary">
-          <ArrowRight className="size-4" /> الرئيسية
+        <Link
+          to="/"
+          className="mb-4 inline-flex min-h-[44px] items-center gap-1.5 text-xs sm:text-sm font-extrabold text-primary hover:underline"
+        >
+          <ArrowRight className="size-4" aria-hidden="true" />
+          <span>الرجوع للرئيسية</span>
         </Link>
 
         {/* Search Input with Debounce feedback and clear button */}
-        <div className="surface mb-3 flex items-center gap-3 px-4 py-3.5">
+        <div className="surface mb-3 flex items-center gap-2.5 px-3.5 h-12 rounded-2xl border border-border/80 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all shadow-xs">
           {isSearching ? (
-            <Loader2 className="size-5 shrink-0 animate-spin text-primary" />
+            <Loader2 className="size-5 shrink-0 animate-spin text-primary" aria-hidden="true" />
           ) : (
-            <SearchIcon className="size-5 shrink-0 text-muted-foreground" />
+            <SearchIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
           )}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             maxLength={60}
-            className="w-full bg-transparent text-base outline-none placeholder:text-muted-foreground"
-            placeholder="ابحث باسم الصنايعي أو الخدمة"
+            className="w-full bg-transparent text-[15px] sm:text-base outline-none placeholder:text-[15px] placeholder:text-muted-foreground text-foreground"
+            placeholder="ابحث باسم الصنايعي أو نوع الخدمة..."
             suppressHydrationWarning
           />
           {q.trim() && (
             <button
               type="button"
               onClick={() => setQ("")}
-              className="text-muted-foreground hover:text-foreground p-0.5 cursor-pointer"
+              className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-secondary transition-colors"
               aria-label="مسح البحث"
             >
-              <X className="size-4" />
+              <X className="size-4" aria-hidden="true" />
             </button>
           )}
         </div>
 
         {/* Area Dropdown */}
-        <div className="surface mb-4 px-4 py-2.5">
+        <div className="relative surface mb-4 h-12 rounded-2xl border border-border/80 bg-card shadow-xs">
+          <MapPin className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 size-4 text-primary shrink-0 z-10" aria-hidden="true" />
           <select
             value={area}
             onChange={(e) => setArea(e.target.value)}
-            className="w-full bg-transparent py-1 text-base outline-none cursor-pointer"
+            aria-label="اختر القرية"
+            className="h-full w-full appearance-none bg-transparent pr-9.5 pl-8 text-[15px] font-bold text-foreground outline-none cursor-pointer focus:border-primary truncate"
           >
             <option value="">كل البلاد</option>
             {(areas.data ?? []).map((a) => (
@@ -227,6 +235,7 @@ function SearchPage() {
               </option>
             ))}
           </select>
+          <ChevronDown className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground shrink-0 z-10" aria-hidden="true" />
         </div>
 
         {/* Availability / Emergency Filters */}
@@ -239,9 +248,20 @@ function SearchPage() {
         </div>
 
         {results.isLoading ? (
-          <div className="py-12 text-center text-muted-foreground">
-            <Loader2 className="mx-auto size-6 animate-spin text-primary mb-2" />
-            <p className="text-sm font-bold">جاري البحث عن الصنايعية…</p>
+          <div className="space-y-3.5 py-2" aria-label="جاري تحميل النتائج">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="surface p-4 sm:p-5 rounded-2xl animate-pulse space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="h-6 w-36 bg-muted rounded-md" />
+                  <div className="h-5 w-16 bg-muted/60 rounded-md" />
+                </div>
+                <div className="h-4 w-48 bg-muted/70 rounded-md" />
+                <div className="grid grid-cols-2 gap-2.5 pt-2">
+                  <div className="h-11 bg-muted/80 rounded-xl" />
+                  <div className="h-11 bg-muted/80 rounded-xl" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : results.isError ? (
           <div className="py-12 text-center space-y-4">
@@ -250,7 +270,7 @@ function SearchPage() {
             <button
               type="button"
               onClick={() => results.refetch()}
-              className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-primary px-6 py-2.5 text-base font-extrabold text-primary-foreground hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
+              className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-primary px-6 py-2.5 text-base font-extrabold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all shadow-xs cursor-pointer"
             >
               حاول تاني
             </button>

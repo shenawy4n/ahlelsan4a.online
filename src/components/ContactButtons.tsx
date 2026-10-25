@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { Share2 } from "lucide-react";
+import { PhoneCall, MessageCircle, Share2, Loader2 } from "lucide-react";
 import { callProvider, whatsappProvider, shareProvider, RateLimitError } from "@/lib/contact";
 
 export interface ProviderShareInfo {
@@ -23,12 +23,14 @@ export function ContactButtons({
   providerInfo?: ProviderShareInfo;
 }) {
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<"phone" | "whatsapp" | null>(null);
   const [noPhone, setNoPhone] = useState(false);
-  const h = big ? "min-h-14 text-lg" : "min-h-13 text-base";
+  const h = big ? "min-h-[52px] text-base sm:text-lg" : "min-h-[48px] text-[15px] sm:text-base";
 
   async function run(fn: () => Promise<unknown>, isPhone = true) {
     if (busy) return;
     setBusy(true);
+    setBusyAction(isPhone ? "phone" : "whatsapp");
     try {
       await fn();
     } catch (err: unknown) {
@@ -40,6 +42,7 @@ export function ContactButtons({
       }
     } finally {
       setBusy(false);
+      setBusyAction(null);
     }
   }
 
@@ -67,29 +70,44 @@ export function ContactButtons({
 
   return (
     <div className="grid gap-2">
-      <div className={`grid gap-2.5 ${hasWhatsapp ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className={`grid gap-2 sm:gap-2.5 ${hasWhatsapp ? "grid-cols-2" : "grid-cols-1"}`}>
         <button
           type="button"
           disabled={busy || noPhone}
-          onClick={() => run(() => callProvider(providerId))}
-          className={`flex ${h} items-center justify-center gap-2 rounded-xl bg-primary py-3.5 font-extrabold text-primary-foreground active:brightness-95 disabled:opacity-60 transition-all`}
+          onClick={() => run(() => callProvider(providerId), true)}
+          aria-label={`اتصال هاتفي بمقدم الخدمة ${providerInfo?.name ?? ""}`}
+          className={`group flex ${h} items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 font-black text-primary-foreground hover:bg-primary/95 active:scale-[0.98] disabled:opacity-60 transition-all shadow-xs`}
         >
-          {busy ? "جاري الاتصال..." : "📞 اتصال"}
+          {busyAction === "phone" ? (
+            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          ) : (
+            <PhoneCall className="size-4.5 group-hover:scale-110 transition-transform" aria-hidden="true" />
+          )}
+          <span>{busyAction === "phone" ? "جاري الاتصال..." : "اتصال"}</span>
         </button>
+
         {hasWhatsapp ? (
           <button
             type="button"
             disabled={busy}
             onClick={() => run(() => whatsappProvider(providerId), false)}
-            className={`flex ${h} items-center justify-center gap-2 rounded-xl bg-whatsapp py-3.5 font-extrabold text-whatsapp-foreground active:brightness-95 disabled:opacity-60 transition-all`}
+            aria-label={`مراسلة واتساب لمقدم الخدمة ${providerInfo?.name ?? ""}`}
+            className={`group flex ${h} items-center justify-center gap-2 rounded-xl bg-whatsapp px-4 py-3 font-black text-whatsapp-foreground hover:brightness-105 active:scale-[0.98] disabled:opacity-60 transition-all shadow-xs`}
           >
-            💬 WhatsApp
+            {busyAction === "whatsapp" ? (
+              <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+            ) : (
+              <MessageCircle className="size-4.5 group-hover:scale-110 transition-transform fill-current" aria-hidden="true" />
+            )}
+            <span>{busyAction === "whatsapp" ? "جاري الفتح..." : "واتساب"}</span>
           </button>
         ) : null}
       </div>
 
       {noPhone && (
-        <p className="text-center text-sm font-bold text-destructive">رقم الهاتف غير متاح حالياً</p>
+        <p className="text-center text-xs sm:text-sm font-bold text-destructive">
+          رقم الهاتف غير متاح حالياً
+        </p>
       )}
 
       {providerInfo && (
@@ -98,9 +116,11 @@ export function ContactButtons({
             type="button"
             disabled={busy}
             onClick={handleShare}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary/80 px-3 py-1.5 text-xs font-extrabold text-foreground hover:bg-secondary active:brightness-95 transition-colors"
+            aria-label="مشاركة رابط صفحة مقدم الخدمة"
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-border/80 bg-secondary/60 px-3 py-1.5 text-xs font-bold text-foreground hover:bg-secondary hover:border-primary/30 active:scale-[0.98] transition-all"
           >
-            <Share2 className="size-3.5" /> مشاركة
+            <Share2 className="size-3.5 text-muted-foreground" aria-hidden="true" />
+            <span>مشاركة الرابط</span>
           </button>
         </div>
       )}

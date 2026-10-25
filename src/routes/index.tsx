@@ -133,19 +133,23 @@ function Home() {
 
       <main className="mx-auto w-full max-w-3xl px-4">
         {/* Hero Section */}
-        <section className="pt-6">
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-foreground tracking-tight">
-            دليلك الموثق
+        <section className="pt-6 sm:pt-8">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-black text-primary mb-2.5">
+            <Sparkles className="size-3.5 shrink-0" aria-hidden="true" />
+            <span>دليل خدمات القرية المعتمد</span>
+          </div>
+          <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-black text-foreground tracking-tight leading-tight">
+            دليلك الموثق لخدمات قريتك
           </h1>
-          <p className="mt-1 text-[15px] text-muted-foreground">
-            كل أرقام الصنايعية والخدمات في مكان واحد. اتصل أو كلّمه واتساب مباشرة.
+          <p className="mt-2 text-sm sm:text-base text-muted-foreground font-medium max-w-xl">
+            كل أرقام الصنايعية والحرفيين الموثوقين في مكان واحد. اتصل مباشرة أو تواصل عبر واتساب بنقرة واحدة.
           </p>
 
-          {/* Compact Search & Village Selector Row (48px high, gap-2) */}
-          <form onSubmit={submit} className="mt-4 flex items-center gap-2">
+          {/* Compact Search & Village Selector Row (48px high) */}
+          <form onSubmit={submit} className="mt-4 sm:mt-5 flex items-center gap-2">
             {/* Search Field (flex-1) */}
-            <div className="surface flex-1 min-w-0 flex items-center h-12 rounded-2xl border border-border px-3 focus-within:border-primary transition-all">
-              <Search className="size-5 shrink-0 text-muted-foreground ml-2" />
+            <div className="surface flex-1 min-w-0 flex items-center h-12 rounded-2xl border border-border/80 px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+              <Search className="size-5 shrink-0 text-muted-foreground ml-2" aria-hidden="true" />
               <input
                 type="search"
                 inputMode="search"
@@ -154,26 +158,26 @@ function Home() {
                 onChange={(e) => setSearch(e.target.value)}
                 maxLength={60}
                 className="w-full min-w-0 bg-transparent text-[15px] sm:text-base outline-none placeholder:text-[15px] placeholder:text-muted-foreground text-foreground"
-                placeholder="ابحث عن خدمة أو اسم"
+                placeholder="ابحث عن خدمة، صنايعي، أو مهنة..."
               />
               <button
                 type="submit"
-                aria-label="بحث"
-                className="grid size-10 shrink-0 place-items-center rounded-full bg-accent text-accent-foreground hover:brightness-105 active:scale-95 transition-all shadow-xs mr-0.5"
+                aria-label="تنفيذ البحث"
+                className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground hover:brightness-105 active:scale-95 transition-all shadow-xs mr-0.5"
               >
-                <Search className="size-4.5" />
+                <Search className="size-4.5" aria-hidden="true" />
               </button>
             </div>
 
             {/* Village Selector (native select styled as button) */}
-            <div className="relative h-12 min-w-[7.5rem] max-w-[42%] shrink-0">
-              <MapPin className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-primary shrink-0 z-10" />
+            <div className="relative h-12 min-w-[7.5rem] sm:min-w-[8.5rem] max-w-[42%] shrink-0">
+              <MapPin className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 size-4 text-primary shrink-0 z-10" aria-hidden="true" />
               <select
                 value={areaId}
                 onChange={(e) => handleAreaChange(e.target.value)}
                 aria-label="اختر القرية"
                 suppressHydrationWarning
-                className="surface h-12 w-full appearance-none rounded-2xl border border-border bg-card pr-8.5 pl-7 text-[15px] font-bold text-foreground outline-none focus:border-primary truncate cursor-pointer transition-all shadow-xs"
+                className="surface h-12 w-full appearance-none rounded-2xl border border-border/80 bg-card pr-8.5 pl-7 text-[15px] font-bold text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 truncate cursor-pointer transition-all shadow-xs hover:border-primary/40"
               >
                 <option value="">كل البلاد</option>
                 {sortedAreas.map((a) => (
@@ -182,27 +186,27 @@ function Home() {
                   </option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground shrink-0 z-10" />
+              <ChevronDown className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground shrink-0 z-10" aria-hidden="true" />
             </div>
           </form>
 
-          {/* Quick Filter Badges (without home area filter) */}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2.5">
+          {/* Quick Filter Badges */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
             <Link
               to="/search"
               search={{ filter: "available_now" }}
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 py-2 text-sm font-extrabold text-success hover:bg-success/20 transition-all"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 py-2 text-xs sm:text-sm font-extrabold text-success hover:bg-success/20 active:scale-[0.98] transition-all shadow-xs"
             >
-              <span className="size-2 rounded-full bg-success inline-block shrink-0" />
+              <span className="size-2 rounded-full bg-success inline-block shrink-0 animate-pulse" aria-hidden="true" />
               <span>متاح الآن فقط</span>
             </Link>
 
             <Link
               to="/search"
               search={{ filter: "emergency_now" }}
-              className="inline-flex min-h-[48px] items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-sm font-extrabold text-warning hover:bg-warning/20 transition-all"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-xs sm:text-sm font-extrabold text-warning hover:bg-warning/20 active:scale-[0.98] transition-all shadow-xs"
             >
-              <Zap className="size-4 fill-current shrink-0" />
+              <Zap className="size-4 fill-current shrink-0" aria-hidden="true" />
               <span>خدمة طوارئ ٢٤ ساعة</span>
             </Link>
           </div>
@@ -210,10 +214,10 @@ function Home() {
 
         {/* Categories Section - positioned directly below search & filters */}
         <section className="pt-8">
-          <div className="mb-3 space-y-1.5">
-            <h2 className="text-lg sm:text-xl font-extrabold text-foreground">الأقسام والخدمات</h2>
+          <div className="mb-3.5 flex items-center justify-between gap-3">
+            <h2 className="font-display text-lg sm:text-xl font-black text-foreground">الأقسام والخدمات</h2>
             {/* Semantic legend: dots + text */}
-            <div className="flex items-center gap-3.5 text-xs font-semibold text-muted-foreground">
+            <div className="flex items-center gap-3 text-xs font-semibold text-muted-foreground">
               <span className="inline-flex items-center gap-1.5 text-success">
                 <span className="size-2 rounded-full bg-success inline-block shrink-0" aria-hidden="true" />
                 <span>متاح الآن</span>
@@ -228,7 +232,7 @@ function Home() {
           {isLoading ? (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 sm:gap-2.5">
               {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="surface h-28 animate-pulse rounded-2xl" />
+                <div key={i} className="surface h-28 sm:h-32 animate-pulse rounded-2xl" />
               ))}
             </div>
           ) : (
@@ -246,12 +250,12 @@ function Home() {
                     to="/category/$id"
                     params={{ id: c.id }}
                     search={{ area: areaId || undefined }}
-                    className="surface group relative flex flex-col items-center justify-between p-2 sm:p-2.5 text-center active:scale-[0.98] hover:border-primary/50 hover:shadow-xs transition-all rounded-2xl min-h-[108px] sm:min-h-[114px]"
+                    className="surface-interactive group relative flex flex-col items-center justify-between p-2.5 sm:p-3 text-center rounded-2xl min-h-[110px] sm:min-h-[118px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
                   >
-                    <span className="grid size-9 place-items-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-110 shrink-0">
+                    <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary transition-all duration-200 group-hover:scale-110 group-hover:bg-primary group-hover:text-primary-foreground shrink-0 shadow-2xs">
                       <CategoryIcon name={c.icon} className="size-5" />
                     </span>
-                    <span className="text-xs sm:text-sm font-extrabold leading-tight text-foreground line-clamp-2 min-h-[2rem] sm:min-h-[2.25rem] flex items-center justify-center w-full my-1 px-0.5">
+                    <span className="font-display text-xs sm:text-sm font-black leading-tight text-foreground line-clamp-2 min-h-[2rem] sm:min-h-[2.25rem] flex items-center justify-center w-full my-1 px-0.5 group-hover:text-primary transition-colors">
                       {c.name}
                     </span>
                     <div className="flex items-center justify-center min-h-[1.25rem]">
@@ -289,20 +293,22 @@ function Home() {
         <section className="pt-8">
           <div className="mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
             {/* Tabs Row */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0" role="tablist">
               <button
                 type="button"
+                role="tab"
+                aria-selected={showcaseTab === "featured"}
                 onClick={() => {
                   setUserPickedTab(true);
                   setShowcaseTab("featured");
                 }}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-extrabold transition-all shrink-0 ${
+                className={`min-h-[44px] inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-black transition-all shrink-0 active:scale-[0.98] ${
                   showcaseTab === "featured"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "surface text-muted-foreground hover:text-foreground hover:border-primary/40 border border-border"
                 }`}
               >
-                <Sparkles className={`size-4 shrink-0 ${showcaseTab === "featured" ? "text-primary-foreground" : "text-amber-500"}`} />
+                <Sparkles className={`size-4 shrink-0 ${showcaseTab === "featured" ? "text-primary-foreground" : "text-amber-500"}`} aria-hidden="true" />
                 <span>خدمات مميزة</span>
                 {featured.length > 0 && (
                   <span
@@ -319,48 +325,55 @@ function Home() {
 
               <button
                 type="button"
+                role="tab"
+                aria-selected={showcaseTab === "popular"}
                 onClick={() => {
                   setUserPickedTab(true);
                   setShowcaseTab("popular");
                 }}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-extrabold transition-all shrink-0 ${
+                className={`min-h-[44px] inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-black transition-all shrink-0 active:scale-[0.98] ${
                   showcaseTab === "popular"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "surface text-muted-foreground hover:text-foreground hover:border-primary/40 border border-border"
                 }`}
               >
-                <Flame className={`size-4 shrink-0 ${showcaseTab === "popular" ? "text-primary-foreground" : "text-orange-500"}`} />
+                <Flame className={`size-4 shrink-0 ${showcaseTab === "popular" ? "text-primary-foreground" : "text-orange-500"}`} aria-hidden="true" />
                 <span>الأكثر طلباً</span>
               </button>
 
               <button
                 type="button"
+                role="tab"
+                aria-selected={showcaseTab === "top_rated"}
                 onClick={() => {
                   setUserPickedTab(true);
                   setShowcaseTab("top_rated");
                 }}
-                className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-extrabold transition-all shrink-0 ${
+                className={`min-h-[44px] inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs sm:text-sm font-black transition-all shrink-0 active:scale-[0.98] ${
                   showcaseTab === "top_rated"
                     ? "bg-primary text-primary-foreground shadow-xs"
                     : "surface text-muted-foreground hover:text-foreground hover:border-primary/40 border border-border"
                 }`}
               >
-                <Star className={`size-4 shrink-0 ${showcaseTab === "top_rated" ? "text-primary-foreground fill-current" : "text-amber-400 fill-amber-400"}`} />
+                <Star className={`size-4 shrink-0 ${showcaseTab === "top_rated" ? "text-primary-foreground fill-current" : "text-amber-400 fill-amber-400"}`} aria-hidden="true" />
                 <span>الأعلى تقييماً</span>
               </button>
             </div>
 
-            <Link to="/search" className="text-xs sm:text-[14px] font-bold text-primary hover:underline shrink-0 mr-auto sm:mr-0">
+            <Link
+              to="/search"
+              className="text-xs sm:text-sm font-extrabold text-primary hover:underline shrink-0 mr-auto sm:mr-0 inline-flex items-center gap-1 py-1"
+            >
               عرض كل الخدمات ←
             </Link>
           </div>
 
           {/* Subtitle helper based on current tab criteria */}
-          <p className="text-xs text-muted-foreground mb-3 font-medium">
+          <div className="border-s-2 border-primary/50 bg-secondary/30 px-3 py-1.5 rounded-lg text-xs text-muted-foreground font-medium mb-3.5">
             {showcaseTab === "featured" && "خدمات وصناع مختارون ومميزون من إدارة الدليل."}
             {showcaseTab === "popular" && "أكثر الخدمات طلباً وتواصلاً بالاتصال والواتساب بناءً على إحصائيات الدليل."}
             {showcaseTab === "top_rated" && "أعلى الصنايعية تقييماً بناءً على تجارب العملاء الإيجابية المعتمدة."}
-          </p>
+          </div>
 
           {/* Provider Cards List */}
           {(() => {
@@ -368,8 +381,8 @@ function Home() {
               showcaseTab === "featured"
                 ? featured
                 : showcaseTab === "popular"
-                  ? popular
-                  : topRated;
+                ? popular
+                : topRated;
 
             if (isLoading) {
               return (
