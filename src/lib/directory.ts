@@ -363,6 +363,7 @@ export interface ProvidersTotals {
   closedNow: number;
   hoursNotSet: number;
   emergency24: number;
+  delivery?: number;
 }
 
 export interface ProvidersResult {
@@ -376,6 +377,7 @@ export function providersQuery(opts: {
   experienceId?: string | undefined;
   search?: string | undefined;
   filterMode?: "all" | "available_now" | "emergency_now" | undefined;
+  deliveryOnly?: boolean | undefined;
   premiumOnly?: boolean | undefined;
   limit?: number | undefined;
   offset?: number | undefined;

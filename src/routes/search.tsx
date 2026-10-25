@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, useMemo } from "react";
 import { track } from "@/lib/track";
@@ -35,7 +35,8 @@ import { toast } from "sonner";
 type SearchParams = {
   q?: string | undefined;
   area?: string | undefined;
-  filter?: AvailabilityFilterMode | undefined;
+  filter?: AvailabilityFilterMode | "delivery" | undefined;
+  delivery?: boolean | undefined;
 };
 
 export const Route = createFileRoute("/search")({
@@ -44,6 +45,11 @@ export const Route = createFileRoute("/search")({
     ...(typeof s['area'] === "string" && s['area'] ? { area: s['area'] } : {}),
     ...(s['filter'] === "available_now" || s['filter'] === "emergency_now" || s['filter'] === "all"
       ? { filter: s['filter'] }
+      : s['filter'] === "delivery"
+      ? { filter: "all", delivery: true }
+      : {}),
+    ...(s['delivery'] === true || s['delivery'] === "true" || s['delivery'] === "1" || s['delivery'] === 1
+      ? { delivery: true }
       : {}),
   }),
   loader: async ({ context }) => {
@@ -70,9 +76,13 @@ export const Route = createFileRoute("/search")({
 
 function SearchPage() {
   const params = Route.useSearch();
+  const navigate = Route.useNavigate();
   const [q, setQ] = useState(params.q ?? "");
   const [area, setArea] = useState(params.area ?? "");
-  const [filterMode, setFilterMode] = useState<AvailabilityFilterMode>(params.filter || "all");
+  const initialDelivery = Boolean(params.delivery || params.filter === "delivery");
+  const initialFilterMode: AvailabilityFilterMode = params.filter === "delivery" ? "all" : (params.filter || "all");
+  const [filterMode, setFilterMode] = useState<AvailabilityFilterMode>(initialFilterMode);
+  const [deliveryOnly, setDeliveryOnly] = useState<boolean>(initialDelivery);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
@@ -87,7 +97,20 @@ function SearchPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, area]);
+  }, [debouncedQ, area, filterMode, deliveryOnly]);
+
+  useEffect(() => {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        q: debouncedQ || undefined,
+        area: area || undefined,
+        filter: filterMode !== "all" ? filterMode : undefined,
+        delivery: deliveryOnly ? true : undefined,
+      }),
+      replace: true,
+    });
+  }, [debouncedQ, area, filterMode, deliveryOnly, navigate]);
 
   useEffect(() => {
     const t = debouncedQ.trim();
@@ -103,6 +126,7 @@ function SearchPage() {
       search: debouncedQ || undefined,
       areaId: area || undefined,
       filterMode,
+      deliveryOnly: deliveryOnly || undefined,
       limit: page * PAGE_SIZE,
     })
   );
@@ -117,6 +141,7 @@ function SearchPage() {
     closedNow: 0,
     hoursNotSet: 0,
     emergency24: 0,
+    delivery: 0,
   };
 
   const counts = useMemo(() => {
@@ -124,6 +149,7 @@ function SearchPage() {
       all: totals.all,
       availableNow: totals.openNow,
       emergencyNow: totals.emergency24,
+      delivery: totals.delivery,
     };
   }, [totals]);
 
@@ -243,6 +269,8 @@ function SearchPage() {
           <AvailabilityFilter
             currentMode={filterMode}
             onModeChange={setFilterMode}
+            deliveryOnly={deliveryOnly}
+            onDeliveryChange={setDeliveryOnly}
             counts={counts}
           />
         </div>
@@ -281,7 +309,9 @@ function SearchPage() {
             {area && (
               <div className="surface flex items-center justify-between p-4 text-xs sm:text-sm">
                 <span className="text-muted-foreground font-medium">
-                  لا يوجد نتائج مطابقة في «{selectedAreaName || "البلد المحددة"}».
+                  {deliveryOnly
+                    ? `لا يوجد صنايعية يقدمون خدمة التوصيل في «${selectedAreaName || "البلد المحددة"}».`
+                    : `لا يوجد نتائج مطابقة في «${selectedAreaName || "البلد المحددة"}».`}
                 </span>
                 <button
                   type="button"
@@ -296,8 +326,13 @@ function SearchPage() {
               query={debouncedQ}
               areaId={area}
               filterMode={filterMode}
+              deliveryOnly={deliveryOnly}
               onClearArea={() => setArea("")}
-              onClearFilter={() => setFilterMode("all")}
+              onClearFilter={() => {
+                setFilterMode("all");
+                setDeliveryOnly(false);
+              }}
+              onClearDelivery={() => setDeliveryOnly(false)}
               onClearQuery={() => setQ("")}
               categories={categories.data ?? []}
               areas={areas.data ?? []}
@@ -309,7 +344,9 @@ function SearchPage() {
             {/* If openNow is 0, show info line on top */}
             {totals.openNow === 0 && (
               <div className="surface rounded-2xl border border-border p-4 text-center text-sm font-bold text-muted-foreground shadow-xs">
-                مفيش صنايعي متاح دلوقتي حسب المواعيد المسجلة
+                {deliveryOnly
+                  ? "مفيش صنايعي بيوصل للمنازل ومتاح دلوقتي حسب المواعيد المسجلة"
+                  : "مفيش صنايعي متاح دلوقتي حسب المواعيد المسجلة"}
               </div>
             )}
 
@@ -425,12 +462,14 @@ function SearchPage() {
               </div>
               <div className="space-y-1">
                 <h3 className="text-lg font-extrabold text-foreground">
-                  لسه مفيش خدمة طوارئ ٢٤ ساعة مسجلة
+                  {deliveryOnly
+                    ? "لسه مفيش خدمة طوارئ ٢٤ ساعة توفر التوصيل مسجلة"
+                    : "لسه مفيش خدمة طوارئ ٢٤ ساعة مسجلة"}
                 </h3>
                 <p className="text-sm text-muted-foreground max-w-md mx-auto">
                   {area
-                    ? `لا توجد خدمات طوارئ ٢٤ ساعة مسجلة حالياً في ${selectedAreaName || "هذه القرية"}.`
-                    : "لا توجد خدمات طوارئ ٢٤ ساعة مسجلة حالياً في هذا البحث."}
+                    ? `لا توجد خدمات طوارئ ٢٤ ساعة${deliveryOnly ? " توفر التوصيل" : ""} مسجلة حالياً في ${selectedAreaName || "هذه القرية"}.`
+                    : `لا توجد خدمات طوارئ ٢٤ ساعة${deliveryOnly ? " توفر التوصيل" : ""} مسجلة حالياً في هذا البحث.`}
                 </p>
               </div>
 
@@ -438,7 +477,10 @@ function SearchPage() {
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => setFilterMode("all")}
+                  onClick={() => {
+                    setFilterMode("all");
+                    setDeliveryOnly(false);
+                  }}
                   className="rounded-xl bg-primary px-5 py-2.5 text-sm font-extrabold text-primary-foreground hover:bg-primary/90 transition-all shadow-xs cursor-pointer"
                 >
                   عرض كل الصنايعية ({totals.all})

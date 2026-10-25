@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
-import { Search, MapPin, ChevronDown, Lightbulb, UserPlus, Zap, Sparkles, Flame, Star } from "lucide-react";
+import { Search, MapPin, ChevronDown, Lightbulb, UserPlus, Zap, Sparkles, Flame, Star, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { submitPublicForm, publicFormError } from "@/lib/public-forms.functions";
 import {
@@ -194,7 +194,7 @@ function Home() {
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:gap-2.5">
             <Link
               to="/search"
-              search={{ filter: "available_now" }}
+              search={{ filter: "available_now", area: areaId || undefined }}
               className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-success/30 bg-success/10 px-4 py-2 text-xs sm:text-sm font-extrabold text-success hover:bg-success/20 active:scale-[0.98] transition-all shadow-xs"
             >
               <span className="size-2 rounded-full bg-success inline-block shrink-0 animate-pulse" aria-hidden="true" />
@@ -203,11 +203,20 @@ function Home() {
 
             <Link
               to="/search"
-              search={{ filter: "emergency_now" }}
+              search={{ filter: "emergency_now", area: areaId || undefined }}
               className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-warning/30 bg-warning/10 px-4 py-2 text-xs sm:text-sm font-extrabold text-warning hover:bg-warning/20 active:scale-[0.98] transition-all shadow-xs"
             >
               <Zap className="size-4 fill-current shrink-0" aria-hidden="true" />
               <span>خدمة طوارئ ٢٤ ساعة</span>
+            </Link>
+
+            <Link
+              to="/search"
+              search={{ delivery: true, area: areaId || undefined }}
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs sm:text-sm font-extrabold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 active:scale-[0.98] transition-all shadow-xs"
+            >
+              <Truck className="size-4 shrink-0" aria-hidden="true" />
+              <span>توصيل للمنازل</span>
             </Link>
           </div>
         </section>

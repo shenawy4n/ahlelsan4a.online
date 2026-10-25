@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { SearchX, MapPin, Tag, Lightbulb, UserPlus, ArrowLeft, Check, Sparkles } from "lucide-react";
+import { SearchX, MapPin, Tag, Lightbulb, UserPlus, ArrowLeft, Check, Sparkles, Truck } from "lucide-react";
 import { submitPublicForm, publicFormError } from "@/lib/public-forms.functions";
 import type { Category, Area } from "@/lib/directory";
 import type { AvailabilityFilterMode } from "@/components/AvailabilityFilter";
@@ -11,8 +11,10 @@ interface ZeroSearchResultsProps {
   categoryId?: string;
   areaId?: string;
   filterMode?: AvailabilityFilterMode;
+  deliveryOnly?: boolean;
   onClearArea?: () => void;
   onClearFilter?: () => void;
+  onClearDelivery?: () => void;
   onClearQuery?: () => void;
   categories?: Category[];
   areas?: Area[];
@@ -23,8 +25,10 @@ export function ZeroSearchResults({
   categoryId = "",
   areaId = "",
   filterMode = "all",
+  deliveryOnly = false,
   onClearArea,
   onClearFilter,
+  onClearDelivery,
   onClearQuery,
   categories = [],
   areas = [],
@@ -108,24 +112,62 @@ export function ZeroSearchResults({
     }
   }
 
+  const isDeliveryEmptyOnly = deliveryOnly && filterMode === "all" && !query.trim();
+
   return (
     <div className="surface grid gap-6 p-6 sm:p-8 text-center rounded-2xl shadow-xs">
       {/* Icon and Main Title */}
       <div className="mx-auto flex flex-col items-center">
-        <div className="grid size-16 place-items-center rounded-2xl bg-primary/10 text-primary ring-1 ring-primary/20 shadow-xs">
-          <SearchX className="size-8" aria-hidden="true" />
+        <div
+          className={`grid size-16 place-items-center rounded-2xl shadow-xs ring-1 ${
+            isDeliveryEmptyOnly
+              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-emerald-500/25"
+              : "bg-primary/10 text-primary ring-primary/20"
+          }`}
+        >
+          {isDeliveryEmptyOnly ? (
+            <Truck className="size-8" aria-hidden="true" />
+          ) : (
+            <SearchX className="size-8" aria-hidden="true" />
+          )}
         </div>
         <h3 className="mt-4 font-display text-xl sm:text-2xl font-black text-foreground">
-          لا يوجد صنايعية مطابقون لبحثك
+          {isDeliveryEmptyOnly
+            ? "لا توجد خدمات توصيل للمنازل مسجلة حالياً"
+            : "لا يوجد صنايعية مطابقون لبحثك"}
         </h3>
         <p className="mt-1.5 text-sm sm:text-base text-muted-foreground font-medium max-w-md">
           {query.trim()
-            ? `لم نعثر على صنايعية مسجلين باسم أو خدمة «${query.trim()}»`
+            ? `لم نعثر على صنايعية مسجلين باسم أو خدمة «${query.trim()}»${deliveryOnly ? " ويوفرون خدمة التوصيل" : ""}`
+            : deliveryOnly
+            ? areaId
+              ? "لم نجد خدمات توفر التوصيل للمنازل مسجلة حالياً في هذه المنطقة، لكن يمكنك تصفح باقي الصنايعية أو ترشيح من يوفر التوصيل."
+              : "لا توجد خدمات توفر التوصيل للمنازل مسجلة حالياً وفق هذا البحث."
             : "لم نتمكن من العثور على أي نتائج وفق الفلاتر المحددة"}
         </p>
       </div>
 
-      {/* Action 1: If Availability or Emergency filter is active */}
+      {/* Action: If Delivery filter is active */}
+      {deliveryOnly && onClearDelivery && (
+        <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-xs sm:text-sm text-foreground text-start">
+          <p className="font-black text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+            <Truck className="size-4 shrink-0" aria-hidden="true" />
+            <span>فلتر «توصيل للمنازل» مفعّل</span>
+          </p>
+          <p className="mt-1 opacity-90 font-medium">
+            يوجد صنايعية ومقدمو خدمات مسجلون في هذه المنطقة، ولكنهم لم يسجلوا توفير خدمة التوصيل للمنازل في بياناتهم.
+          </p>
+          <button
+            type="button"
+            onClick={onClearDelivery}
+            className="mt-2.5 inline-flex min-h-[40px] items-center gap-1 font-black text-primary underline hover:text-primary/80 transition-colors cursor-pointer"
+          >
+            إلغاء فلتر التوصيل وعرض كل الصنايعية المتاحين
+          </button>
+        </div>
+      )}
+
+      {/* Action: If Availability or Emergency filter is active */}
       {filterMode !== "all" && onClearFilter && (
         <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-xs sm:text-sm text-foreground text-start">
           <p className="font-black text-warning-foreground">
@@ -137,7 +179,7 @@ export function ZeroSearchResults({
           <button
             type="button"
             onClick={onClearFilter}
-            className="mt-2.5 inline-flex min-h-[40px] items-center gap-1 font-black text-primary underline hover:text-primary/80 transition-colors"
+            className="mt-2.5 inline-flex min-h-[40px] items-center gap-1 font-black text-primary underline hover:text-primary/80 transition-colors cursor-pointer"
           >
             إلغاء فلتر التواجد وعرض كل الصنايعية
           </button>

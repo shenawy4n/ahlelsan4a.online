@@ -566,6 +566,7 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
     experienceId?: string;
     search?: string;
     filterMode?: "all" | "available_now" | "emergency_now";
+    deliveryOnly?: boolean;
     premiumOnly?: boolean;
     limit?: number;
     offset?: number;
@@ -615,13 +616,21 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
       return true;
     });
 
-    // 3. Compute exact totals across ALL matching providers (never page-capped)
+    // Count delivery providers in matching set before delivery restriction
+    const deliveryCount = matchingProviders.filter((p) => Boolean(p.has_delivery)).length;
+
+    // Apply delivery restriction if deliveryOnly is enabled
+    const candidateProviders = opts.deliveryOnly
+      ? matchingProviders.filter((p) => Boolean(p.has_delivery))
+      : matchingProviders;
+
+    // 3. Compute exact totals across candidate providers (never page-capped)
     let openNow = 0;
     let closedNow = 0;
     let hoursNotSet = 0;
     let emergency24 = 0;
 
-    for (const p of matchingProviders) {
+    for (const p of candidateProviders) {
       const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
       if (isEmerg) emergency24++;
 
@@ -636,11 +645,12 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
     }
 
     const totals: ProvidersTotals = {
-      all: matchingProviders.length,
+      all: candidateProviders.length,
       openNow,
       closedNow,
       hoursNotSet,
       emergency24,
+      delivery: deliveryCount,
     };
 
     // 4. Order items according to requested view:
@@ -672,21 +682,21 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
     let orderedProviders: MinimalActiveProvider[];
 
     if (opts.filterMode === "available_now") {
-      const openGroup = matchingProviders
+      const openGroup = candidateProviders
         .filter((p) => {
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return isEmerg || isOpenNow(p.working_hours) === true;
         })
         .sort(compareCategoryOrdering);
 
-      const closedGroup = matchingProviders
+      const closedGroup = candidateProviders
         .filter((p) => {
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return !isEmerg && isOpenNow(p.working_hours) === false;
         })
         .sort(compareCategoryOrdering);
 
-      const notSetGroup = matchingProviders
+      const notSetGroup = candidateProviders
         .filter((p) => {
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return !isEmerg && isOpenNow(p.working_hours) === null;
@@ -695,11 +705,11 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
 
       orderedProviders = [...openGroup, ...closedGroup, ...notSetGroup];
     } else if (opts.filterMode === "emergency_now") {
-      orderedProviders = matchingProviders
+      orderedProviders = candidateProviders
         .filter((p) => Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours)))
         .sort(compareCategoryOrdering);
     } else {
-      orderedProviders = [...matchingProviders].sort(compareCategoryOrdering);
+      orderedProviders = [...candidateProviders].sort(compareCategoryOrdering);
     }
 
     // 5. Slice requested page of items

@@ -44,10 +44,17 @@ function CategoryErrorComponent() {
 }
 
 export const Route = createFileRoute("/category/$id")({
-  validateSearch: (s: Record<string, unknown>): { area?: string; filter?: AvailabilityFilterMode } => ({
-    ...(typeof s['area'] === "string" && s['area'] ? { area: s['area'] } : {}),
-    ...(s['filter'] === "available_now" || s['filter'] === "emergency_now" || s['filter'] === "all"
-      ? { filter: s['filter'] }
+  validateSearch: (
+    s: Record<string, unknown>
+  ): { area?: string; filter?: AvailabilityFilterMode; delivery?: boolean } => ({
+    ...(typeof s["area"] === "string" && s["area"] ? { area: s["area"] } : {}),
+    ...(s["filter"] === "available_now" || s["filter"] === "emergency_now" || s["filter"] === "all"
+      ? { filter: s["filter"] }
+      : s["filter"] === "delivery"
+        ? { filter: "all", delivery: true }
+        : {}),
+    ...(s["delivery"] === true || s["delivery"] === "true" || s["delivery"] === "1" || s["delivery"] === 1
+      ? { delivery: true }
       : {}),
   }),
   loader: async ({ context, params, location }) => {
@@ -84,12 +91,14 @@ export const Route = createFileRoute("/category/$id")({
 function CategoryPage() {
   const { id } = Route.useParams();
   const searchParams = Route.useSearch();
+  const navigate = Route.useNavigate();
 
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [area, setArea] = useState(searchParams.area ?? "");
   const [exp, setExp] = useState("");
   const [filterMode, setFilterMode] = useState<AvailabilityFilterMode>(searchParams.filter || "all");
+  const [deliveryOnly, setDeliveryOnly] = useState<boolean>(Boolean(searchParams.delivery));
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
@@ -101,10 +110,23 @@ function CategoryPage() {
     return () => clearTimeout(timer);
   }, [q]);
 
+  // Synchronize URL query parameters
+  useEffect(() => {
+    navigate({
+      search: (prev) => ({
+        ...prev,
+        area: area || undefined,
+        filter: filterMode !== "all" ? filterMode : undefined,
+        delivery: deliveryOnly ? true : undefined,
+      }),
+      replace: true,
+    });
+  }, [area, filterMode, deliveryOnly, navigate]);
+
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [debouncedQ, area, exp]);
+  }, [debouncedQ, area, exp, filterMode, deliveryOnly]);
 
   const experience = useQuery(experienceQuery);
   const categories = useQuery(categoriesQuery);
@@ -123,6 +145,7 @@ function CategoryPage() {
       areaId: area || undefined,
       experienceId: exp || undefined,
       filterMode,
+      deliveryOnly,
       limit: page * PAGE_SIZE,
     })
   );
@@ -141,6 +164,7 @@ function CategoryPage() {
     closedNow: 0,
     hoursNotSet: 0,
     emergency24: 0,
+    delivery: 0,
   };
 
   const counts = useMemo(() => {
@@ -148,6 +172,7 @@ function CategoryPage() {
       all: totals.all,
       availableNow: totals.openNow,
       emergencyNow: totals.emergency24,
+      delivery: totals.delivery ?? 0,
     };
   }, [totals]);
 
@@ -232,11 +257,13 @@ function CategoryPage() {
           </div>
         </div>
 
-        {/* Availability / Emergency Filters */}
+        {/* Availability / Emergency / Delivery Filters */}
         <div className="mb-5">
           <AvailabilityFilter
             currentMode={filterMode}
             onModeChange={setFilterMode}
+            deliveryOnly={deliveryOnly}
+            onDeliveryChange={setDeliveryOnly}
             counts={counts}
           />
         </div>
@@ -275,8 +302,10 @@ function CategoryPage() {
             categoryId={id}
             areaId={area}
             filterMode={filterMode}
+            deliveryOnly={deliveryOnly}
             onClearArea={() => setArea("")}
             onClearFilter={() => setFilterMode("all")}
+            onClearDelivery={() => setDeliveryOnly(false)}
             onClearQuery={() => setQ("")}
             categories={categories.data ?? []}
             areas={areas.data ?? []}
@@ -289,7 +318,12 @@ function CategoryPage() {
               ))}
             </div>
 
-            {allProviders.length < (filterMode === "emergency_now" ? totals.emergency24 : totals.all) && (
+            {allProviders.length <
+              (filterMode === "emergency_now"
+                ? totals.emergency24
+                : filterMode === "available_now"
+                  ? totals.openNow
+                  : totals.all) && (
               <div className="pt-4 text-center">
                 <button
                   type="button"
