@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { ArrowRight, MapPin, Clock, Wallet, Wrench, Flag, Award, Briefcase, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,8 +62,17 @@ function ProviderPage() {
   const { data: p, isLoading } = useQuery(providerQuery(id));
   const pid = p?.id;
   const pcat = p?.category_id;
+  const trackedProviderRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (pid) track("profile_view", { provider_id: pid, category_id: pcat });
+    // Only record once valid provider data has resolved
+    if (!pid) return;
+
+    // Guard against repeated query state transitions or re-renders for the same provider visit
+    if (trackedProviderRef.current === pid) return;
+    trackedProviderRef.current = pid;
+
+    track("profile_view", { provider_id: pid, category_id: pcat });
   }, [pid, pcat]);
 
   return (

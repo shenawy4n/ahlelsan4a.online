@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-type EventType =
+export type EventType =
   | "profile_view"
   | "phone_click"
   | "whatsapp_click"
@@ -46,34 +46,126 @@ if (typeof window !== "undefined") {
   });
 }
 
-// Queue and batch events to avoid bursting network requests
-let eventQueue: {
+interface QueuedEvent {
   event_type: EventType;
   provider_id: string | null;
   category_id: string | null;
-  query: string | null;
-}[] = [];
-let flushTimeout: any = null;
+  retries: number;
+}
 
-async function flushEvents() {
-  if (!eventQueue.length) return;
-  const toSend = [...eventQueue];
-  eventQueue = [];
+// Queue and batch events to avoid bursting network requests
+let eventQueue: QueuedEvent[] = [];
+let flushTimeout: ReturnType<typeof setTimeout> | null = null;
+let isFlushing = false;
 
-  const admin = await isAdmin();
-  if (admin) return;
+// Session-level deduplication for profile views to avoid React Strict Mode or fast re-render double-tracking
+const recentProfileViews = new Map<string, number>();
 
-  try {
-    const { error } = await supabase.from("analytics_events").insert(toSend);
-    if (error) {
-      console.warn("[track] Analytics event write failed:", error.message);
+/**
+ * Clean up old deduplication entries after 60 seconds to avoid unbounded memory growth.
+ */
+function pruneRecentViews() {
+  const cutoff = Date.now() - 60_000;
+  for (const [id, timestamp] of recentProfileViews.entries()) {
+    if (timestamp < cutoff) {
+      recentProfileViews.delete(id);
     }
-  } catch {
-    // Non-blocking fail silently
   }
 }
 
-/** Lightweight, anonymous event logging. Batched to prevent network flooding. */
+/**
+ * Flush all queued analytics events.
+ * Uses the dedicated server function as primary ingestion with direct client Supabase insert fallback.
+ */
+export async function flushEvents(): Promise<void> {
+  if (flushTimeout) {
+    clearTimeout(flushTimeout);
+    flushTimeout = null;
+  }
+
+  if (!eventQueue.length || isFlushing) return;
+  isFlushing = true;
+
+  const toSend = [...eventQueue];
+  eventQueue = [];
+
+  try {
+    const admin = await isAdmin();
+    if (admin) {
+      // Exclude admin events per analytics policy
+      isFlushing = false;
+      return;
+    }
+
+    // Map strictly to the database columns (event_type, provider_id, category_id)
+    // CRITICAL: Do NOT include 'query' column which does not exist in the live analytics_events schema.
+    const dbRows = toSend.map((item) => ({
+      event_type: item.event_type,
+      provider_id: item.provider_id,
+      category_id: item.category_id,
+    }));
+
+    let succeeded = false;
+
+    // 1. Primary path: TanStack Start Server Function
+    try {
+      const { recordAnalyticsEventsServerFn } = await import("./analytics.functions");
+      const res = await recordAnalyticsEventsServerFn({ data: { events: dbRows } });
+      if (res.ok) {
+        succeeded = true;
+      } else {
+        console.warn("[track] Server ingestion returned non-ok:", res.error);
+      }
+    } catch (serverFnErr) {
+      console.warn("[track] Server function ingestion failed, attempting direct insert fallback:", serverFnErr);
+    }
+
+    // 2. Fallback path: Direct client-side Supabase insert
+    if (!succeeded) {
+      const { error } = await supabase.from("analytics_events").insert(dbRows);
+      if (error) {
+        console.warn(`[track] Analytics write failed [code: ${error.code}]:`, error.message);
+        // If transient network error, allow up to 2 retries
+        const isTransient = error.code === "" || error.code === "PGRST000" || error.message?.includes("fetch");
+        if (isTransient) {
+          const eligibleForRetry = toSend
+            .filter((item) => item.retries < 2)
+            .map((item) => ({ ...item, retries: item.retries + 1 }));
+          if (eligibleForRetry.length && eventQueue.length < 50) {
+            eventQueue.unshift(...eligibleForRetry);
+          }
+        }
+      } else {
+        succeeded = true;
+      }
+    }
+  } catch (err) {
+    console.warn("[track] Unexpected exception during event flush:", err);
+  } finally {
+    isFlushing = false;
+  }
+}
+
+/**
+ * Flush analytics immediately. Can be invoked on route unmount or beforeunload.
+ */
+export const flushAnalytics = flushEvents;
+
+// Register lifecycle listeners to capture queued events before page hidden or navigated away
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    void flushEvents();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      void flushEvents();
+    }
+  });
+}
+
+/**
+ * Lightweight, anonymous event logging. Batched to prevent network flooding.
+ */
 export function track(
   event_type: EventType,
   extra: {
@@ -84,17 +176,31 @@ export function track(
 ) {
   if (typeof window === "undefined") return;
 
+  // Deduplicate rapid repeat profile views for the same provider (e.g. React Strict Mode or state transitions)
+  if (event_type === "profile_view" && extra.provider_id) {
+    const now = Date.now();
+    const lastViewed = recentProfileViews.get(extra.provider_id);
+    if (lastViewed && now - lastViewed < 3000) {
+      // Ignore duplicate profile view within 3 seconds for the exact same provider
+      return;
+    }
+    recentProfileViews.set(extra.provider_id, now);
+    if (recentProfileViews.size > 50) {
+      pruneRecentViews();
+    }
+  }
+
   eventQueue.push({
     event_type,
     provider_id: extra.provider_id ?? null,
     category_id: extra.category_id ?? null,
-    query: extra.query?.slice(0, 80) ?? null,
+    retries: 0,
   });
 
   if (!flushTimeout) {
     flushTimeout = setTimeout(() => {
       flushTimeout = null;
       void flushEvents();
-    }, 1500);
+    }, 350);
   }
 }

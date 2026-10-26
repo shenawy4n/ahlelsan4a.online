@@ -90,7 +90,7 @@ export function Overview({ go }: { go: (tab: string, action?: string) => void })
   const suggestionsCount = suggestionsCountQuery.data ?? 0;
   const totalPendingRequests = appsCount + reportsCount + suggestionsCount;
 
-  if (providers.isLoading && !providers.data) {
+  if ((providers.isLoading && !providers.data) || (ev.isLoading && !ev.data)) {
     return (
       <div className="surface p-12 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
         <Loader2 className="size-6 animate-spin text-primary" />
@@ -99,13 +99,14 @@ export function Overview({ go }: { go: (tab: string, action?: string) => void })
     );
   }
 
-  if (providers.isError && (!providers.data || (Array.isArray(providers.data) && providers.data.length === 0))) {
+  if (providers.isError || ev.isError) {
     return (
       <AdminErrorState
         title="تعذر تحميل بيانات لوحة التحكم"
-        error={providers.error}
+        error={providers.error || ev.error}
         onRetry={() => {
           providers.refetch();
+          ev.refetch();
         }}
       />
     );
@@ -238,6 +239,15 @@ export function Analytics() {
   const provRows = provList.map((p) => ({ p, s: byProv.get(p.id) ?? blank() }));
   const topBy = (k: Sort) => [...provRows].filter((r) => r.s[k] > 0).sort((a, b) => b.s[k] - a.s[k]).slice(0, 10);
   const provSorted = [...provRows].sort((a, b) => b.s[sort] - a.s[sort]).slice(0, 50);
+
+  if ((providers.isLoading && !providers.data) || (ev.isLoading && !ev.data)) {
+    return (
+      <div className="surface p-12 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
+        <Loader2 className="size-6 animate-spin text-primary" />
+        <p className="font-bold">جاري تحميل بيانات الإحصائيات...</p>
+      </div>
+    );
+  }
 
   if (providers.isError || ev.isError) {
     return (
