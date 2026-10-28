@@ -39,6 +39,7 @@ export interface DirectorySettingsMap {
   providerDelivery: Record<string, boolean>;
   providerPortfolios: Record<string, string>;
   categoryProviderOrders: Record<string, string[]>;
+  shortcutProviderOrders: Record<string, string[]>;
 }
 
 // In-memory cache for 60 seconds of directory metadata
@@ -72,7 +73,7 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
   const { data } = await client
     .from("app_settings")
     .select("key, value")
-    .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%,key.like.cat_prov_order_%,key.like.prov_portfolio_%");
+    .or("key.like.cat_unit_%,key.like.prov_unit_%,key.like.prov_cats_%,key.like.prov_deliv_%,key.like.cat_prov_order_%,key.like.prov_portfolio_%,key.like.shortcut_prov_order_%");
 
   const categoryUnits: Record<string, string> = {};
   const providerProfessions: Record<string, string> = {};
@@ -80,6 +81,7 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
   const providerDelivery: Record<string, boolean> = {};
   const providerPortfolios: Record<string, string> = {};
   const categoryProviderOrders: Record<string, string[]> = {};
+  const shortcutProviderOrders: Record<string, string[]> = {};
 
   if (Array.isArray(data)) {
     for (const row of data) {
@@ -97,6 +99,15 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
           const parsed = JSON.parse(row.value);
           if (Array.isArray(parsed)) {
             categoryProviderOrders[row.key] = parsed;
+          }
+        } catch {
+          // ignore malformed
+        }
+      } else if (row.key.startsWith("shortcut_prov_order_")) {
+        try {
+          const parsed = JSON.parse(row.value);
+          if (Array.isArray(parsed)) {
+            shortcutProviderOrders[row.key] = parsed;
           }
         } catch {
           // ignore malformed
@@ -121,6 +132,7 @@ export async function getCachedDirectorySettings(client: any): Promise<Directory
     providerDelivery,
     providerPortfolios,
     categoryProviderOrders,
+    shortcutProviderOrders,
   };
   directorySettingsCache = { timestamp: now, data: result };
   return result;
@@ -655,11 +667,29 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
 
     // 4. Order items according to requested view:
     // Category manual order applies ONLY when categoryId is specified
-    const manualOrder = opts.categoryId
+    const categoryManualOrder = opts.categoryId
       ? dirSettings.categoryProviderOrders[`cat_prov_order_${opts.categoryId}`] || []
       : [];
-    const orderMap = new Map<string, number>();
-    manualOrder.forEach((id, idx) => orderMap.set(id, idx));
+
+    // Shortcut manual order applies to the 3 shortcuts when not overridden by a category
+    const shortcutOrderKey =
+      opts.filterMode === "available_now"
+        ? "shortcut_prov_order_available_now"
+        : opts.filterMode === "emergency_now"
+        ? "shortcut_prov_order_emergency_now"
+        : opts.deliveryOnly
+        ? "shortcut_prov_order_delivery"
+        : null;
+
+    const shortcutManualOrder = shortcutOrderKey
+      ? dirSettings.shortcutProviderOrders[shortcutOrderKey] || []
+      : [];
+
+    const categoryOrderMap = new Map<string, number>();
+    categoryManualOrder.forEach((id, idx) => categoryOrderMap.set(id, idx));
+
+    const shortcutOrderMap = new Map<string, number>();
+    shortcutManualOrder.forEach((id, idx) => shortcutOrderMap.set(id, idx));
 
     const comparePremiumThenNewest = (a: MinimalActiveProvider, b: MinimalActiveProvider) => {
       const aPrem = isPremiumActive(a) ? 1 : 0;
@@ -670,10 +700,14 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
       return a.id.localeCompare(b.id);
     };
 
-    const compareCategoryOrdering = (a: MinimalActiveProvider, b: MinimalActiveProvider) => {
-      if (opts.categoryId && manualOrder.length > 0) {
-        const aPos = orderMap.has(a.id) ? orderMap.get(a.id)! : Infinity;
-        const bPos = orderMap.has(b.id) ? orderMap.get(b.id)! : Infinity;
+    const compareProvidersOrdering = (a: MinimalActiveProvider, b: MinimalActiveProvider) => {
+      if (opts.categoryId && categoryManualOrder.length > 0) {
+        const aPos = categoryOrderMap.has(a.id) ? categoryOrderMap.get(a.id)! : Infinity;
+        const bPos = categoryOrderMap.has(b.id) ? categoryOrderMap.get(b.id)! : Infinity;
+        if (aPos !== bPos) return aPos - bPos;
+      } else if (shortcutManualOrder.length > 0) {
+        const aPos = shortcutOrderMap.has(a.id) ? shortcutOrderMap.get(a.id)! : Infinity;
+        const bPos = shortcutOrderMap.has(b.id) ? shortcutOrderMap.get(b.id)! : Infinity;
         if (aPos !== bPos) return aPos - bPos;
       }
       return comparePremiumThenNewest(a, b);
@@ -687,29 +721,29 @@ export const getProvidersServerFn = createServerFn({ method: "POST" })
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return isEmerg || isOpenNow(p.working_hours) === true;
         })
-        .sort(compareCategoryOrdering);
+        .sort(compareProvidersOrdering);
 
       const closedGroup = candidateProviders
         .filter((p) => {
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return !isEmerg && isOpenNow(p.working_hours) === false;
         })
-        .sort(compareCategoryOrdering);
+        .sort(compareProvidersOrdering);
 
       const notSetGroup = candidateProviders
         .filter((p) => {
           const isEmerg = Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours));
           return !isEmerg && isOpenNow(p.working_hours) === null;
         })
-        .sort(compareCategoryOrdering);
+        .sort(compareProvidersOrdering);
 
       orderedProviders = [...openGroup, ...closedGroup, ...notSetGroup];
     } else if (opts.filterMode === "emergency_now") {
       orderedProviders = candidateProviders
         .filter((p) => Boolean(p.is_emergency_24h || isProviderEmergency24h(p.working_hours)))
-        .sort(compareCategoryOrdering);
+        .sort(compareProvidersOrdering);
     } else {
-      orderedProviders = [...candidateProviders].sort(compareCategoryOrdering);
+      orderedProviders = [...candidateProviders].sort(compareProvidersOrdering);
     }
 
     // 5. Slice requested page of items

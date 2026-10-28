@@ -88,7 +88,14 @@ function SearchPage() {
 
   // Emergency nomination inline form state
   const [showEmergencyNominate, setShowEmergencyNominate] = useState(false);
-  const [emergencyForm, setEmergencyForm] = useState({ name: "", phone: "", whatsapp: "" });
+  const [emergencyForm, setEmergencyForm] = useState({
+    name: "",
+    phone: "",
+    whatsapp: "",
+    category_id: "",
+    area_id: "",
+  });
+  const [emergencyHp, setEmergencyHp] = useState("");
   const [emergencyBusy, setEmergencyBusy] = useState(false);
   const [emergencyDone, setEmergencyDone] = useState(false);
 
@@ -176,8 +183,9 @@ function SearchPage() {
 
   const handleEmergencyNominateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!emergencyForm.name.trim() || !emergencyForm.phone.trim()) {
-      toast.error("يرجى كتابة الاسم ورقم الهاتف");
+    const finalAreaId = emergencyForm.area_id || area;
+    if (!emergencyForm.name.trim() || !emergencyForm.phone.trim() || !emergencyForm.category_id || !finalAreaId) {
+      toast.error("يرجى ملء الاسم والتليفون والقسم والمنطقة");
       return;
     }
     setEmergencyBusy(true);
@@ -185,16 +193,19 @@ function SearchPage() {
       const res = await submitPublicForm({
         data: {
           form: "provider_application",
+          website: emergencyHp,
           name: emergencyForm.name.trim(),
           phone: emergencyForm.phone.trim(),
           whatsapp: emergencyForm.whatsapp.trim() || undefined,
-          area_id: area || undefined,
+          category_id: emergencyForm.category_id,
+          area_id: finalAreaId,
+          services: "خدمة طوارئ ٢٤ ساعة",
         },
       });
       if (!res.ok) {
         toast.error(publicFormError(res.code));
       } else {
-        toast.success("شكراً لك! استلمنا بيانات تسجيل خدمة الطوارئ وسيتم التواصل معك.");
+        toast.success("شكراً لك! استلمنا بيانات تسجيل خدمة الطوارئ وسيتم مراجعتها والتواصل معك.");
         setEmergencyDone(true);
       }
     } catch {
@@ -512,8 +523,17 @@ function SearchPage() {
                     </div>
                   ) : (
                     <form onSubmit={handleEmergencyNominateSubmit} className="space-y-3">
+                      <input
+                        value={emergencyHp}
+                        onChange={(e) => setEmergencyHp(e.target.value)}
+                        name="website"
+                        tabIndex={-1}
+                        autoComplete="off"
+                        aria-hidden="true"
+                        className="hidden"
+                      />
                       <div>
-                        <label className="block text-xs font-bold text-foreground mb-1">الاسم أو اسم الخدمة</label>
+                        <label className="block text-xs font-bold text-foreground mb-1">الاسم أو اسم الخدمة *</label>
                         <input
                           type="text"
                           required
@@ -525,7 +545,7 @@ function SearchPage() {
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-bold text-foreground mb-1">رقم الهاتف</label>
+                          <label className="block text-xs font-bold text-foreground mb-1">رقم الهاتف الأساسي *</label>
                           <input
                             type="tel"
                             dir="ltr"
@@ -546,6 +566,40 @@ function SearchPage() {
                             placeholder="01xxxxxxxxx"
                             className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
                           />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-foreground mb-1">القسم أو المهنة *</label>
+                          <select
+                            required
+                            value={emergencyForm.category_id}
+                            onChange={(e) => setEmergencyForm({ ...emergencyForm, category_id: e.target.value })}
+                            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
+                          >
+                            <option value="">اختر المهنة/القسم</option>
+                            {(categories.data ?? []).map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-foreground mb-1">القرية أو المنطقة *</label>
+                          <select
+                            required
+                            value={emergencyForm.area_id || area}
+                            onChange={(e) => setEmergencyForm({ ...emergencyForm, area_id: e.target.value })}
+                            className="w-full rounded-xl border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
+                          >
+                            <option value="">اختر القرية/المنطقة</option>
+                            {(areas.data ?? []).map((a) => (
+                              <option key={a.id} value={a.id}>
+                                {a.name}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
                       <button

@@ -99,12 +99,12 @@ export const submitPublicForm = createServerFn({ method: "POST" })
       const [cat, area, dupe, dupeApp] = await Promise.all([
         supabaseAdmin.from("categories").select("id").eq("id", data.category_id).eq("status", "active").maybeSingle(),
         supabaseAdmin.from("areas").select("id").eq("id", data.area_id).eq("status", "active").maybeSingle(),
-        supabaseAdmin.from("providers").select("id,phone"),
+        supabaseAdmin.from("providers").select("id,phone,secondary_phone"),
         supabaseAdmin.from("provider_applications").select("id").eq("phone", phone!).eq("status", "pending").limit(1),
       ]);
       if (!cat.data || !area.data) return { ok: false, code: "invalid" };
       const { normalizeEgPhone } = await import("./directory");
-      if ((dupe.data ?? []).some((p) => normalizeEgPhone(p.phone) === phone) || (dupeApp.data?.length ?? 0) > 0)
+      if ((dupe.data ?? []).some((p: any) => normalizeEgPhone(p.phone) === phone || (p.secondary_phone && normalizeEgPhone(p.secondary_phone) === phone)) || (dupeApp.data?.length ?? 0) > 0)
         return { ok: false, code: "duplicate_phone" };
       const { error } = await supabaseAdmin.from("provider_applications").insert({
         name: data.name, phone: phone!, whatsapp, category_id: data.category_id, area_id: data.area_id,
@@ -139,9 +139,9 @@ export const submitPublicForm = createServerFn({ method: "POST" })
   });
 
 export function publicFormError(code: string) {
-  if (code === "invalid_phone") return "رقم التليفون مش صحيح";
-  if (code === "duplicate_phone") return "الرقم ده مسجل بالفعل";
+  if (code === "invalid_phone") return "رقم التليفون غير صحيح (يرجى إدخال رقم محمول مصري صحيح 01xxxxxxxxx)";
+  if (code === "duplicate_phone") return "رقم الهاتف مسجل بالفعل في الدليل أو يوجد طلب معلق له";
   if (code === "invalid_rating") return "التقييم يجب أن يكون بين ١ و ٥ نجوم";
   if (code === "short_comment") return "يرجى كتابة تعليق لا يقل عن ٣ أحرف";
-  return code === "rate_limited" ? "طلبات كتير في وقت قصير، حاول بعد شوية" : code === "invalid" ? "البيانات مش صحيحة" : "حصلت مشكلة، حاول تاني";
+  return code === "rate_limited" ? "طلبات كثيرة في وقت قصير، يرجى المحاولة بعد قليل" : code === "invalid" ? "البيانات غير مكتملة أو غير صحيحة" : "حصلت مشكلة أثناء الإرسال، حاول تاني";
 }

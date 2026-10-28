@@ -676,6 +676,48 @@ export const saveCategoryProviderOrderAdminFn = createServerFn({ method: "POST" 
     return { ok: true as const };
   });
 
+/** Save shortcut provider manual ordering (Admin only) */
+export const saveShortcutProviderOrderAdminFn = createServerFn({ method: "POST" })
+  .middleware([requireAdminAuth])
+  .validator((d: { shortcutId: string; providerIds: string[] }) => d)
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("../integrations/supabase/client.server");
+
+    const validShortcuts = ["available_now", "emergency_now", "delivery"];
+    if (!validShortcuts.includes(data.shortcutId)) {
+      throw new Response(
+        JSON.stringify({ ok: false, message: "معرف الاختصار غير صالح" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    const key = `shortcut_prov_order_${data.shortcutId.trim()}`;
+    const value = JSON.stringify(Array.isArray(data.providerIds) ? data.providerIds : []);
+
+    const { error } = await supabaseAdmin.from("app_settings").upsert({
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    });
+
+    if (error) {
+      console.error("[saveShortcutProviderOrderAdminFn error]", error);
+      throw new Response(
+        JSON.stringify({ ok: false, message: error.message || "فشل حفظ ترتيب صنايعية الاختصار" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    try {
+      const { invalidateCategoryUnitsCache } = await import("./directory.functions");
+      invalidateCategoryUnitsCache();
+    } catch {
+      // non-blocking
+    }
+
+    return { ok: true as const };
+  });
+
 /** Get reports list (Admin & Moderator) */
 export const getReportsAdminFn = createServerFn({ method: "GET" })
   .middleware([requireModeratorAuth])

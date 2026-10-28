@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { SearchX, MapPin, Tag, Lightbulb, UserPlus, ArrowLeft, Check, Sparkles, Truck } from "lucide-react";
 import { submitPublicForm, publicFormError } from "@/lib/public-forms.functions";
-import type { Category, Area } from "@/lib/directory";
+import { categoriesQuery, areasQuery, type Category, type Area } from "@/lib/directory";
 import type { AvailabilityFilterMode } from "@/components/AvailabilityFilter";
 
 interface ZeroSearchResultsProps {
@@ -33,23 +34,28 @@ export function ZeroSearchResults({
   categories = [],
   areas = [],
 }: ZeroSearchResultsProps) {
+  const qCategories = useQuery(categoriesQuery);
+  const qAreas = useQuery(areasQuery);
+  const resolvedCategories = categories.length > 0 ? categories : (qCategories.data ?? []);
+  const resolvedAreas = areas.length > 0 ? areas : (qAreas.data ?? []);
+
   const [showSuggestService, setShowSuggestService] = useState(false);
   const [serviceName, setServiceName] = useState(query);
   const [suggestBusy, setSuggestBusy] = useState(false);
   const [suggestHp, setSuggestHp] = useState("");
   const [suggestDone, setSuggestDone] = useState(false);
 
-  const [showNominate, setShowNominate] = useState(false);
-  const [nominateForm, setNominateForm] = useState({
+  const [showJoin, setShowJoin] = useState(false);
+  const [joinForm, setJoinForm] = useState({
     name: "",
     phone: "",
     whatsapp: "",
     category_id: categoryId || "",
     area_id: areaId || "",
   });
-  const [nominateBusy, setNominateBusy] = useState(false);
-  const [nominateHp, setNominateHp] = useState("");
-  const [nominateDone, setNominateDone] = useState(false);
+  const [joinBusy, setJoinBusy] = useState(false);
+  const [joinHp, setJoinHp] = useState("");
+  const [joinDone, setJoinDone] = useState(false);
 
   async function handleSuggestService(e: React.FormEvent) {
     e.preventDefault();
@@ -80,35 +86,35 @@ export function ZeroSearchResults({
     }
   }
 
-  async function handleNominateProvider(e: React.FormEvent) {
+  async function handleJoinProvider(e: React.FormEvent) {
     e.preventDefault();
-    if (!nominateForm.name.trim() || !nominateForm.phone.trim() || !nominateForm.category_id || !nominateForm.area_id) {
+    if (!joinForm.name.trim() || !joinForm.phone.trim() || !joinForm.category_id || !joinForm.area_id) {
       toast.error("يرجى ملء الاسم والتليفون والقسم والمنطقة");
       return;
     }
-    setNominateBusy(true);
+    setJoinBusy(true);
     try {
       const res = await submitPublicForm({
         data: {
           form: "provider_application",
-          website: nominateHp,
-          name: nominateForm.name.trim(),
-          phone: nominateForm.phone.trim(),
-          whatsapp: nominateForm.whatsapp.trim() || undefined,
-          category_id: nominateForm.category_id || undefined,
-          area_id: nominateForm.area_id || undefined,
+          website: joinHp,
+          name: joinForm.name.trim(),
+          phone: joinForm.phone.trim(),
+          whatsapp: joinForm.whatsapp.trim() || undefined,
+          category_id: joinForm.category_id || undefined,
+          area_id: joinForm.area_id || undefined,
         },
       });
       if (!res.ok) {
         toast.error(publicFormError(res.code));
       } else {
-        toast.success("شكراً لك! تم استلام ترشيح الصنايعي وسيتم مراجعته والتواصل معه.");
-        setNominateDone(true);
+        toast.success("شكراً لك! تم استلام طلب انضمامك وسيتم مراجعته والتواصل معك.");
+        setJoinDone(true);
       }
     } catch {
-      toast.error("حدث خطأ أثناء إرسال الترشيح");
+      toast.error("حدث خطأ أثناء إرسال طلب الانضمام");
     } finally {
-      setNominateBusy(false);
+      setJoinBusy(false);
     }
   }
 
@@ -295,44 +301,44 @@ export function ZeroSearchResults({
             )}
           </div>
 
-          {/* Option D: Nominate a Provider */}
+          {/* Option D: Join as Provider (ضيف نفسك) */}
           <div className="rounded-xl border border-border bg-card/60 p-3 text-xs">
-            {!showNominate ? (
+            {!showJoin ? (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <UserPlus className="size-4 text-primary shrink-0" />
-                  <span className="font-bold text-foreground">تعرف صنايعي شاطر في المنطقة دي؟</span>
+                  <span className="font-bold text-foreground">صاحب صنعة أو حرفي في المنطقة دي؟</span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowNominate(true)}
+                  onClick={() => setShowJoin(true)}
                   className="font-extrabold text-primary underline hover:text-primary/80"
                 >
-                  اقترح صنايعياً جديداً
+                  ضيف نفسك في الدليل
                 </button>
               </div>
-            ) : nominateDone ? (
+            ) : joinDone ? (
               <div className="flex items-center gap-2 text-success font-bold py-1">
                 <Check className="size-4" />
-                <span>تم إرسال ترشيح الصنايعي! سنقوم بمراجعته وإضافته للدليل.</span>
+                <span>تم إرسال طلب انضمامك بنجاح! سنقوم بمراجعته والتواصل معك لنشر بياناتك.</span>
               </div>
             ) : (
-              <form onSubmit={handleNominateProvider} className="grid gap-2 pt-1">
+              <form onSubmit={handleJoinProvider} className="grid gap-2 pt-1">
                 <div className="flex items-center justify-between font-bold text-foreground">
                   <span className="flex items-center gap-1.5">
-                    <UserPlus className="size-4 text-primary" /> ترشيح صنايعي جديد:
+                    <UserPlus className="size-4 text-primary" /> سجّل بياناتك كصنايعي:
                   </span>
                   <button
                     type="button"
-                    onClick={() => setShowNominate(false)}
+                    onClick={() => setShowJoin(false)}
                     className="text-muted-foreground hover:text-foreground"
                   >
                     إلغاء
                   </button>
                 </div>
                 <input
-                  value={nominateHp}
-                  onChange={(e) => setNominateHp(e.target.value)}
+                  value={joinHp}
+                  onChange={(e) => setJoinHp(e.target.value)}
                   tabIndex={-1}
                   autoComplete="off"
                   aria-hidden="true"
@@ -340,9 +346,9 @@ export function ZeroSearchResults({
                 />
                 <input
                   type="text"
-                  value={nominateForm.name}
-                  onChange={(e) => setNominateForm({ ...nominateForm, name: e.target.value })}
-                  placeholder="اسم الصنايعي *"
+                  value={joinForm.name}
+                  onChange={(e) => setJoinForm({ ...joinForm, name: e.target.value })}
+                  placeholder="اسمك أو اسم الورشة *"
                   className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary"
                   maxLength={80}
                   required
@@ -350,37 +356,37 @@ export function ZeroSearchResults({
                 <input
                   type="tel"
                   dir="ltr"
-                  value={nominateForm.phone}
-                  onChange={(e) => setNominateForm({ ...nominateForm, phone: e.target.value })}
-                  placeholder="رقم التليفون *"
+                  value={joinForm.phone}
+                  onChange={(e) => setJoinForm({ ...joinForm, phone: e.target.value })}
+                  placeholder="رقم تليفونك للتواصل *"
                   className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground outline-none focus:ring-1 focus:ring-primary text-end"
                   maxLength={30}
                   required
                 />
-                {categories.length > 0 && (
+                {resolvedCategories.length > 0 && (
                   <select
-                    value={nominateForm.category_id}
-                    onChange={(e) => setNominateForm({ ...nominateForm, category_id: e.target.value })}
+                    value={joinForm.category_id}
+                    onChange={(e) => setJoinForm({ ...joinForm, category_id: e.target.value })}
                     className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground outline-none"
                     required
                   >
-                    <option value="">اختار الصنعة / الخدمة *</option>
-                    {categories.map((c) => (
+                    <option value="">اختار الصنعة / المهنة *</option>
+                    {resolvedCategories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
                       </option>
                     ))}
                   </select>
                 )}
-                {areas.length > 0 && (
+                {resolvedAreas.length > 0 && (
                   <select
-                    value={nominateForm.area_id}
-                    onChange={(e) => setNominateForm({ ...nominateForm, area_id: e.target.value })}
+                    value={joinForm.area_id}
+                    onChange={(e) => setJoinForm({ ...joinForm, area_id: e.target.value })}
                     className="w-full rounded-lg border border-border bg-card px-3 py-2 text-xs text-foreground outline-none"
                     required
                   >
                     <option value="">اختار المنطقة / القرية *</option>
-                    {areas.map((a) => (
+                    {resolvedAreas.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.name}
                       </option>
@@ -389,10 +395,10 @@ export function ZeroSearchResults({
                 )}
                 <button
                   type="submit"
-                  disabled={nominateBusy}
+                  disabled={joinBusy}
                   className="rounded-lg bg-primary py-2 text-xs font-extrabold text-primary-foreground disabled:opacity-60"
                 >
-                  {nominateBusy ? "جاري الإرسال..." : "إرسال ترشيح الصنايعي"}
+                  {joinBusy ? "جاري الإرسال..." : "إرسال طلب الانضمام للدليل"}
                 </button>
               </form>
             )}

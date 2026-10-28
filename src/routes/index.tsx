@@ -506,7 +506,7 @@ function CommunityActionsCard({
   categories: { id: string; name: string }[];
   areas: { id: string; name: string }[];
 }) {
-  const [activeTab, setActiveTab] = useState<"nominate" | "suggest" | null>(null);
+  const [activeTab, setActiveTab] = useState<"join" | "suggest" | null>(null);
 
   // Suggest state
   const [suggestName, setSuggestName] = useState("");
@@ -516,7 +516,10 @@ function CommunityActionsCard({
   async function sendSuggest(e: React.FormEvent) {
     e.preventDefault();
     const v = suggestName.trim();
-    if (v.length < 2) return;
+    if (v.length < 2) {
+      toast.error("يرجى كتابة اسم الخدمة المقترحة (حرفين على الأقل)");
+      return;
+    }
     setSuggestBusy(true);
     const res = await submitPublicForm({
       data: { form: "service_suggestion", name: v.slice(0, 60), website: suggestHp },
@@ -526,7 +529,7 @@ function CommunityActionsCard({
       toast.error(publicFormError(res.code));
       return;
     }
-    toast.success("شكراً! تم استلام اقتراحك وسنعمل على توفيره");
+    toast.success("شكراً لك! تم استلام اقتراح الخدمة وسنعمل على إضافتها قريباً");
     setSuggestName("");
     setActiveTab(null);
   }
@@ -536,31 +539,33 @@ function CommunityActionsCard({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="min-w-0">
           <h3 className="text-lg sm:text-xl font-extrabold text-foreground">
-            تعرف حد شاطر بيقدّم خدمة؟
+            صاحب صنعة أو محتاج خدمة؟
           </h3>
           <p className="mt-1 text-[15px] text-muted-foreground">
-            رشّح صنايعي موثوق لقريتك أو اقترح مهنة جديدة غير متوفرة في الدليل.
+            سجّل بياناتك كصنايعي في الدليل، أو اقترح مهنة وخدمة جديدة غير متوفرة.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          {/* ضيف نفسك */}
           <button
             type="button"
-            onClick={() => setActiveTab((prev) => (prev === "nominate" ? null : "nominate"))}
-            className={`min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-base font-extrabold transition-all shadow-xs ${
-              activeTab === "nominate"
+            onClick={() => setActiveTab((prev) => (prev === "join" ? null : "join"))}
+            className={`min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl px-4 sm:px-5 py-2.5 text-sm sm:text-base font-extrabold transition-all shadow-xs cursor-pointer ${
+              activeTab === "join"
                 ? "bg-secondary text-foreground border border-border"
                 : "bg-primary text-primary-foreground hover:bg-primary/90"
             }`}
           >
             <UserPlus className="size-5" />
-            <span>{activeTab === "nominate" ? "إغلاق الترشيح" : "رشّح صنايعي"}</span>
+            <span>{activeTab === "join" ? "إغلاق التسجيل" : "ضيف نفسك"}</span>
           </button>
 
+          {/* اقترح خدمة */}
           <button
             type="button"
             onClick={() => setActiveTab((prev) => (prev === "suggest" ? null : "suggest"))}
-            className={`min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-base font-extrabold transition-all shadow-xs ${
+            className={`min-h-[48px] inline-flex items-center justify-center gap-2 rounded-xl px-4 sm:px-5 py-2.5 text-sm sm:text-base font-extrabold transition-all shadow-xs cursor-pointer ${
               activeTab === "suggest"
                 ? "bg-secondary text-foreground border border-border"
                 : "border border-border bg-card text-foreground hover:bg-secondary"
@@ -572,19 +577,20 @@ function CommunityActionsCard({
         </div>
       </div>
 
-      {activeTab === "nominate" && (
+      {/* Form: ضيف نفسك */}
+      {activeTab === "join" && (
         <div className="mt-6 border-t border-border pt-5">
           <div className="mb-3 flex items-center justify-between">
-            <h4 className="text-base font-extrabold text-foreground">بيانات الصنايعي المرشح للإضافة</h4>
+            <h4 className="text-base font-extrabold text-foreground">سجّل بياناتك كصنايعي أو صاحب خدمة في الدليل</h4>
             <button
               type="button"
               onClick={() => setActiveTab(null)}
-              className="text-[15px] font-bold text-muted-foreground hover:text-foreground"
+              className="text-[15px] font-bold text-muted-foreground hover:text-foreground cursor-pointer"
             >
               إلغاء
             </button>
           </div>
-          <NominateForm
+          <ProviderApplicationForm
             categories={categories}
             areas={areas}
             onSuccess={() => setActiveTab(null)}
@@ -593,6 +599,7 @@ function CommunityActionsCard({
         </div>
       )}
 
+      {/* Form: اقترح خدمة */}
       {activeTab === "suggest" && (
         <div className="mt-6 border-t border-border pt-5">
           <div className="mb-3 flex items-center justify-between">
@@ -600,7 +607,7 @@ function CommunityActionsCard({
             <button
               type="button"
               onClick={() => setActiveTab(null)}
-              className="text-[15px] font-bold text-muted-foreground hover:text-foreground"
+              className="text-[15px] font-bold text-muted-foreground hover:text-foreground cursor-pointer"
             >
               إلغاء
             </button>
@@ -619,21 +626,21 @@ function CommunityActionsCard({
               value={suggestName}
               onChange={(e) => setSuggestName(e.target.value)}
               maxLength={60}
-              placeholder="مثال: تصليح غسالات، دكتور أطفال، كهربائي منازل..."
+              placeholder="مثال: تصليح غسالات، صيانة فلاتر مياه، كهربائي منازل..."
               className="min-h-[48px] rounded-xl border border-border bg-card px-3.5 py-2.5 text-[15px] sm:text-base text-foreground placeholder:text-[15px] placeholder:text-muted-foreground outline-none focus:border-primary"
               required
             />
             <div className="flex gap-2.5">
               <button
                 disabled={suggestBusy}
-                className="min-h-[48px] flex-1 rounded-xl bg-primary px-5 py-2.5 text-base font-extrabold text-primary-foreground disabled:opacity-60 shadow-xs hover:bg-primary/90 transition-all"
+                className="min-h-[48px] flex-1 rounded-xl bg-primary px-5 py-2.5 text-base font-extrabold text-primary-foreground disabled:opacity-60 shadow-xs hover:bg-primary/90 transition-all cursor-pointer"
               >
                 {suggestBusy ? "جاري الإرسال..." : "إرسال الاقتراح"}
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab(null)}
-                className="min-h-[48px] rounded-xl border border-border px-5 py-2.5 text-base font-bold hover:bg-secondary transition-colors"
+                className="min-h-[48px] rounded-xl border border-border px-5 py-2.5 text-base font-bold hover:bg-secondary transition-colors cursor-pointer"
               >
                 إلغاء
               </button>
@@ -645,7 +652,7 @@ function CommunityActionsCard({
   );
 }
 
-function NominateForm({
+function ProviderApplicationForm({
   categories,
   areas,
   onSuccess,
@@ -676,10 +683,23 @@ function NominateForm({
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (f.name.trim().length < 2 || !f.phone.trim() || !f.category_id || !f.area_id) {
-      toast.error("يرجى ملء الاسم والتليفون والقسم والمنطقة");
+    if (f.name.trim().length < 2) {
+      toast.error("يرجى كتابة الاسم (حرفين على الأقل)");
       return;
     }
+    if (!f.phone.trim()) {
+      toast.error("يرجى إدخال رقم الهاتف للتواصل");
+      return;
+    }
+    if (!f.category_id) {
+      toast.error("يرجى اختيار القسم أو المهنة");
+      return;
+    }
+    if (!f.area_id) {
+      toast.error("يرجى اختيار القرية أو المنطقة");
+      return;
+    }
+
     setBusy(true);
     const res = await submitPublicForm({
       data: {
@@ -696,10 +716,15 @@ function NominateForm({
       toast.error(publicFormError(res.code));
       return;
     }
-    toast.success("شكراً لك! سيتم مراجعة الطلب ونشر الصنايعي في الدليل");
+
+    toast.success("شكراً لك! تم استلام طلب انضمامك بنجاح، وسيقوم فريق العمل بمراجعته ونشر بياناتك في الدليل.");
     setF(empty);
     onSuccess?.();
   }
+
+  const namePlaceholder = "اسمك أو اسم الورشة / المحل *";
+  const phonePlaceholder = "رقم هاتفك للتواصل *";
+  const submitLabel = busy ? "جاري الإرسال..." : "إرسال طلب الانضمام للدليل";
 
   return (
     <form onSubmit={send} className="grid gap-3">
@@ -717,7 +742,7 @@ function NominateForm({
           value={f.name}
           onChange={set("name")}
           maxLength={80}
-          placeholder="اسم الصنايعي أو الورشة *"
+          placeholder={namePlaceholder}
           className={cls}
           required
         />
@@ -726,7 +751,7 @@ function NominateForm({
           onChange={set("phone")}
           maxLength={30}
           inputMode="tel"
-          placeholder="رقم الهاتف الأساسي *"
+          placeholder={phonePlaceholder}
           dir="ltr"
           className={cls}
           required
@@ -773,7 +798,7 @@ function NominateForm({
         value={f.services}
         onChange={set("services")}
         maxLength={300}
-        placeholder="أبرز الخدمات التي يقدمها (اختياري)"
+        placeholder="أبرز الخدمات التي تقدمها (اختياري)"
         className={cls}
       />
       <textarea
@@ -781,21 +806,21 @@ function NominateForm({
         onChange={set("description")}
         maxLength={500}
         rows={2}
-        placeholder="نبذة أو ملاحظات إضافية (اختياري)"
+        placeholder="نبذة عن خبرتك أو ملاحظات إضافية (اختياري)"
         className={cls}
       />
       <div className="flex items-center gap-2.5 pt-1">
         <button
           disabled={busy}
-          className="min-h-[48px] flex-1 rounded-xl bg-primary px-5 py-2.5 text-base font-extrabold text-primary-foreground disabled:opacity-60 shadow-xs hover:bg-primary/90 transition-all"
+          className="min-h-[48px] flex-1 rounded-xl bg-primary px-5 py-2.5 text-base font-extrabold text-primary-foreground disabled:opacity-60 shadow-xs hover:bg-primary/90 transition-all cursor-pointer"
         >
-          {busy ? "جاري الإرسال..." : "إرسال بيانات الترشيح"}
+          {submitLabel}
         </button>
         {onCancel && (
           <button
             type="button"
             onClick={onCancel}
-            className="min-h-[48px] rounded-xl border border-border px-5 py-2.5 text-base font-bold hover:bg-secondary transition-colors"
+            className="min-h-[48px] rounded-xl border border-border px-5 py-2.5 text-base font-bold hover:bg-secondary transition-colors cursor-pointer"
           >
             إلغاء
           </button>
