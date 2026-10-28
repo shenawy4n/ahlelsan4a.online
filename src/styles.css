@@ -2,6 +2,8 @@
 @source "../src";
 @import "tw-animate-css";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 /*
  * أهل الصنعة — design system
  * Warm village signage: sand paper, nile-green actions, clay accents.
@@ -99,6 +101,55 @@
   --sidebar-ring: oklch(0.45 0.085 163);
 }
 
+.dark {
+  --background: oklch(0.185 0.015 150);
+  --foreground: oklch(0.96 0.008 88);
+  --card: oklch(0.235 0.015 150);
+  --card-foreground: oklch(0.96 0.008 88);
+  --popover: oklch(0.245 0.016 150);
+  --popover-foreground: oklch(0.96 0.008 88);
+  --primary: oklch(0.56 0.105 163);
+  --primary-foreground: oklch(0.985 0.012 88);
+  --secondary: oklch(0.28 0.016 150);
+  --secondary-foreground: oklch(0.92 0.012 88);
+  --muted: oklch(0.26 0.014 150);
+  --muted-foreground: oklch(0.72 0.016 140);
+  --accent: oklch(0.62 0.14 48);
+  --accent-foreground: oklch(0.985 0.012 88);
+  --destructive: oklch(0.62 0.20 27);
+  --destructive-foreground: oklch(0.985 0.012 88);
+  --whatsapp: oklch(0.58 0.18 142);
+  --whatsapp-foreground: oklch(0.985 0.012 88);
+  --premium: oklch(0.65 0.15 80);
+  --premium-foreground: oklch(0.18 0.02 80);
+  --success: oklch(0.60 0.15 150);
+  --success-foreground: oklch(0.985 0.012 88);
+  --warning: oklch(0.68 0.16 75);
+  --warning-foreground: oklch(0.20 0.03 75);
+  --info: oklch(0.62 0.14 235);
+  --info-foreground: oklch(0.985 0.012 88);
+  --border: oklch(0.32 0.015 150);
+  --input: oklch(0.32 0.015 150);
+  --ring: oklch(0.56 0.105 163);
+  --sidebar: oklch(0.20 0.015 150);
+  --sidebar-foreground: oklch(0.96 0.008 88);
+  --sidebar-primary: oklch(0.56 0.105 163);
+  --sidebar-primary-foreground: oklch(0.985 0.012 88);
+  --sidebar-accent: oklch(0.28 0.016 150);
+  --sidebar-accent-foreground: oklch(0.92 0.012 88);
+  --sidebar-border: oklch(0.32 0.015 150);
+  --sidebar-ring: oklch(0.56 0.105 163);
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.4), 0 6px 18px -10px oklch(0 0 0 / 0.6);
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -146,6 +197,11 @@
     border-color: oklch(0.45 0.085 163 / 0.4);
     box-shadow: 0 4px 18px -6px oklch(0.3 0.03 140 / 0.18);
     transform: translateY(-1px);
+  }
+
+  .dark .surface-interactive:hover {
+    border-color: oklch(0.56 0.105 163 / 0.5);
+    box-shadow: 0 4px 18px -6px oklch(0 0 0 / 0.5);
   }
 }
 

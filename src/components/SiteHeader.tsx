@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PhoneCall } from "lucide-react";
 import { settingsQuery } from "@/lib/directory";
 import { PWAInstallButton } from "@/components/PWAInstallButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function SiteHeader() {
   const { data } = useQuery(settingsQuery);
@@ -42,10 +43,11 @@ export function SiteHeader() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          <ThemeToggle />
           <Link
             to="/contact"
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-border/80 bg-card px-3.5 py-2 text-xs sm:text-sm font-extrabold text-foreground hover:bg-secondary/80 hover:border-primary/40 active:scale-[0.98] transition-all shadow-xs"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl border border-border/80 bg-card px-3 sm:px-3.5 py-2 text-xs sm:text-sm font-extrabold text-foreground hover:bg-secondary/80 hover:border-primary/40 active:scale-[0.98] transition-all shadow-xs"
             aria-label="تواصل مع إدارة أهل الصنعة"
           >
             <PhoneCall className="size-4 text-primary shrink-0" aria-hidden="true" />

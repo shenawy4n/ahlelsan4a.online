@@ -19,6 +19,7 @@ import { RequestsHub, type RequestsSubTab } from "@/components/admin/RequestsHub
 import { SettingsHub, type SettingsSubTab } from "@/components/admin/SettingsHub";
 import { adminListReviews } from "@/lib/reviews.functions";
 import { AdminErrorState } from "@/components/admin/AdminErrorState";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({
@@ -260,7 +261,8 @@ function AdminPage() {
             </span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
             <Link
               to="/"
               className="hidden sm:flex items-center gap-1.5 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors"
